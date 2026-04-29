@@ -1,0 +1,1488 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="theme-color" content="#0f0f11"/>
+<meta name="description" content="Collaborative todo lists with real-time sync"/>
+<link rel="manifest" id="manifest-link"/>
+<title>Tudo — Collaborative Lists</title>
+
+<!-- Yjs CRDT via ESM, exposed as window.Y -->
+<script type="module">
+  import * as Y from 'https://esm.sh/yjs@13.6.18';
+  window.Y = Y;
+  window._yjsReady = true;
+  window.dispatchEvent(new Event('yjs-ready'));
+</script>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0f0f11;
+  --bg2: #16161a;
+  --bg3: #1e1e24;
+  --bg4: #26262e;
+  --border: #2e2e38;
+  --text: #e8e8f0;
+  --text2: #9090a8;
+  --text3: #5a5a72;
+  --accent: #7c6aff;
+  --accent2: #a855f7;
+  --accent-glow: rgba(124,106,255,0.18);
+  --green: #22d3a0;
+  --red: #ff5c7c;
+  --yellow: #fbbf24;
+  --radius: 10px;
+  --font: 'Syne', sans-serif;
+  --mono: 'JetBrains Mono', monospace;
+  --sidebar: 240px;
+  --header: 56px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ─── Layout ─── */
+#app { display: flex; height: 100vh; overflow: hidden; }
+
+#sidebar {
+  width: var(--sidebar);
+  background: var(--bg2);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  transition: transform 0.25s ease;
+  z-index: 50;
+}
+
+#main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ─── Sidebar ─── */
+.sidebar-logo {
+  padding: 18px 16px 12px;
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+.sidebar-logo span { color: var(--accent); }
+
+.sidebar-section {
+  padding: 10px 8px 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text3);
+  font-family: var(--mono);
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--radius);
+  margin: 2px 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text2);
+  position: relative;
+}
+.list-item:hover { background: var(--bg3); color: var(--text); }
+.list-item.active { background: var(--accent-glow); color: var(--accent); }
+.list-item .li-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--bg4);
+  color: var(--text3);
+  padding: 1px 6px;
+  border-radius: 99px;
+}
+.list-item.active .li-count { background: var(--accent); color: #fff; }
+.list-item .li-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--text3);
+  flex-shrink: 0;
+}
+.list-item.active .li-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+#new-list-btn {
+  margin: 6px 10px;
+  padding: 8px 12px;
+  background: none;
+  border: 1.5px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--text3);
+  font-family: var(--font);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: calc(100% - 20px);
+}
+#new-list-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+
+.sidebar-nav {
+  margin-top: auto;
+  border-top: 1px solid var(--border);
+  padding: 8px;
+}
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text2);
+  transition: all 0.15s;
+  background: none;
+  border: none;
+  width: 100%;
+  font-family: var(--font);
+}
+.nav-btn:hover, .nav-btn.active { background: var(--bg3); color: var(--text); }
+.nav-btn.active { color: var(--accent); }
+
+/* ─── Header ─── */
+#header {
+  height: var(--header);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+#header-title {
+  font-size: 17px;
+  font-weight: 700;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.header-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.header-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
+.header-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.header-btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
+
+/* ─── Todo View ─── */
+#todo-view { flex: 1; overflow-y: auto; padding: 24px; }
+
+.todo-input-wrap {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+#todo-input {
+  flex: 1;
+  background: var(--bg2);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 11px 16px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 15px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+#todo-input:focus { border-color: var(--accent); }
+#todo-input::placeholder { color: var(--text3); }
+#add-btn {
+  padding: 11px 20px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+#add-btn:hover { background: var(--accent2); }
+
+/* ─── Todo Items ─── */
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  margin-bottom: 4px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  transition: all 0.2s;
+  animation: slideIn 0.2s ease;
+  position: relative;
+  group: true;
+}
+.todo-item:hover { border-color: var(--bg4); background: var(--bg3); }
+.todo-item.done { opacity: 0.5; }
+.todo-item.done .todo-text { text-decoration: line-through; color: var(--text3); }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.todo-check {
+  width: 20px; height: 20px;
+  border-radius: 6px;
+  border: 2px solid var(--border);
+  background: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  margin-top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  position: relative;
+}
+.todo-check:hover { border-color: var(--accent); background: var(--accent-glow); }
+.todo-check.checked { background: var(--accent); border-color: var(--accent); }
+.todo-check.checked::after {
+  content: '';
+  width: 5px; height: 9px;
+  border: 2px solid #fff;
+  border-top: none; border-left: none;
+  transform: rotate(45deg) translateY(-1px);
+}
+
+.todo-text {
+  flex: 1;
+  font-size: 14px;
+  line-height: 1.5;
+  word-break: break-word;
+  cursor: text;
+  outline: none;
+}
+.todo-text:focus {
+  background: var(--bg4);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+
+.todo-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.todo-item:hover .todo-actions { opacity: 1; }
+.todo-act-btn {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  border: none;
+  background: var(--bg4);
+  color: var(--text3);
+  cursor: pointer;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.todo-act-btn:hover { background: var(--red); color: #fff; }
+.todo-act-btn.edit-btn:hover { background: var(--accent); color: #fff; }
+
+/* Category group header */
+.category-header {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--text3);
+  margin: 16px 0 8px;
+  padding: 0 2px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.category-header::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── Calendar View ─── */
+#calendar-view {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: none;
+}
+#calendar-view.active { display: block; }
+#todo-view.active { display: block; }
+#todo-view:not(.active) { display: none; }
+
+.cal-grid-header {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+  margin-bottom: 4px;
+}
+.cal-day-name {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text3);
+  padding: 4px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-cell {
+  min-height: 80px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  position: relative;
+}
+.cal-cell:hover { border-color: var(--accent); background: var(--bg3); }
+.cal-cell.other-month { opacity: 0.35; }
+.cal-cell.today { border-color: var(--accent); }
+.cal-cell.today .cal-date { color: var(--accent); font-weight: 800; }
+.cal-cell.has-todos::before {
+  content: '';
+  position: absolute;
+  bottom: 6px; right: 6px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+.cal-date {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text2);
+  margin-bottom: 4px;
+}
+.cal-todo-preview {
+  font-size: 10px;
+  color: var(--text3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 2px;
+}
+.cal-todo-preview.done-prev { text-decoration: line-through; }
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.cal-nav-btn {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  padding: 8px 14px;
+  font-family: var(--font);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.cal-nav-btn:hover { border-color: var(--accent); color: var(--accent); }
+.cal-month-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+}
+
+/* ─── Modals ─── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+.modal {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 24px;
+  width: 100%;
+  max-width: 480px;
+  max-height: 80vh;
+  overflow-y: auto;
+  animation: popIn 0.2s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.93) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 800;
+  margin-bottom: 16px;
+  letter-spacing: -0.3px;
+}
+.modal-input {
+  width: 100%;
+  background: var(--bg3);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+  margin-bottom: 12px;
+  transition: border-color 0.15s;
+}
+.modal-input:focus { border-color: var(--accent); }
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+.modal-btn {
+  padding: 9px 18px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  background: none;
+  color: var(--text2);
+  font-family: var(--font);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.modal-btn:hover { border-color: var(--border); color: var(--text); background: var(--bg4); }
+.modal-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.modal-btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
+
+/* Plugin modal */
+.plugin-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1.5px solid var(--border);
+  margin-bottom: 10px;
+  transition: border-color 0.15s;
+}
+.plugin-card.enabled { border-color: var(--accent); background: var(--accent-glow); }
+.plugin-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.plugin-info { flex: 1; }
+.plugin-name { font-weight: 700; font-size: 14px; margin-bottom: 3px; }
+.plugin-desc { font-size: 12px; color: var(--text3); line-height: 1.4; }
+.plugin-toggle {
+  flex-shrink: 0;
+  width: 40px; height: 22px;
+  border-radius: 99px;
+  background: var(--bg4);
+  border: none;
+  cursor: pointer;
+  position: relative;
+  transition: background 0.2s;
+}
+.plugin-toggle.on { background: var(--accent); }
+.plugin-toggle::after {
+  content: '';
+  position: absolute;
+  left: 3px; top: 3px;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s;
+}
+.plugin-toggle.on::after { transform: translateX(18px); }
+
+/* Share modal */
+.share-link-box {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--bg3);
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text2);
+  overflow: hidden;
+  word-break: break-all;
+}
+.share-copy-btn {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Sync status */
+#sync-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+}
+.sync-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text3);
+  transition: background 0.3s;
+}
+.sync-dot.syncing { background: var(--yellow); animation: pulse 0.8s infinite; }
+.sync-dot.synced { background: var(--green); }
+.sync-dot.error { background: var(--red); }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* ─── Celebration ─── */
+#celebration {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+#celebration.active { opacity: 1; }
+.celebrate-emoji {
+  font-size: 80px;
+  animation: celebBounce 0.6s cubic-bezier(0.34,1.56,0.64,1);
+  filter: drop-shadow(0 0 30px rgba(124,106,255,0.6));
+}
+@keyframes celebBounce {
+  from { transform: scale(0) rotate(-20deg); }
+  to { transform: scale(1) rotate(0deg); }
+}
+
+/* ─── Empty states ─── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text3);
+}
+.empty-state .es-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; }
+.empty-state .es-title { font-size: 18px; font-weight: 700; color: var(--text2); margin-bottom: 8px; }
+.empty-state .es-desc { font-size: 14px; }
+
+/* Mobile sidebar toggle */
+#menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 4px;
+}
+
+/* Progress bar for a list */
+.list-progress {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.progress-bar {
+  flex: 1;
+  height: 4px;
+  background: var(--bg4);
+  border-radius: 99px;
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 99px;
+  transition: width 0.4s ease;
+}
+.progress-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text3);
+  white-space: nowrap;
+}
+
+/* Calendar date modal todos */
+.cal-modal-todo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.cal-modal-todo:last-child { border-bottom: none; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+@media (max-width: 640px) {
+  #menu-toggle { display: flex; }
+  #sidebar {
+    position: fixed;
+    left: 0; top: 0; bottom: 0;
+    transform: translateX(-100%);
+    box-shadow: 4px 0 24px rgba(0,0,0,0.4);
+  }
+  #sidebar.open { transform: translateX(0); }
+  :root { --sidebar: 260px; }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <!-- Sidebar -->
+  <nav id="sidebar">
+    <div class="sidebar-logo">✦ <span>Tudo</span></div>
+
+    <div class="sidebar-section">Lists</div>
+    <div id="lists-nav"></div>
+    <button id="new-list-btn">＋ New list</button>
+
+    <div class="sidebar-nav">
+      <button class="nav-btn active" id="nav-lists" onclick="switchView('lists')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="11.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
+        Lists
+      </button>
+      <button class="nav-btn" id="nav-calendar" onclick="switchView('calendar')">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M5 2v2M11 2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 7h12" stroke="currentColor" stroke-width="1.5"/></svg>
+        Calendar
+      </button>
+      <button class="nav-btn" onclick="openPluginsModal()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2h4v3l2 1-1 2-2-1v2l2 1-1 2-2-1v3H6v-3l-2 1-1-2 2-1v-2l-2 1-1-2 2-1V2z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
+        Plugins
+      </button>
+    </div>
+  </nav>
+
+  <!-- Main -->
+  <div id="main">
+    <header id="header">
+      <button id="menu-toggle" onclick="toggleSidebar()">☰</button>
+      <div id="header-title">My List</div>
+      <div id="sync-status"><div class="sync-dot" id="sync-dot"></div><span id="sync-label">offline</span></div>
+      <button class="header-btn" onclick="openShareModal()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="12" cy="4" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="4" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><circle cx="12" cy="12" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M6 7l4-2M6 9l4 2" stroke="currentColor" stroke-width="1.5"/></svg>
+        Share
+      </button>
+    </header>
+
+    <!-- Todo View -->
+    <div id="todo-view" class="active">
+      <div class="todo-input-wrap">
+        <input id="todo-input" placeholder="Add a task…" autocomplete="off" spellcheck="true"/>
+        <button id="add-btn" onclick="addTodo()">Add</button>
+      </div>
+      <div class="list-progress">
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+        <div class="progress-label" id="progress-label">0 / 0</div>
+      </div>
+      <div id="todos-container"></div>
+    </div>
+
+    <!-- Calendar View -->
+    <div id="calendar-view">
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="calNav(-1)">← Prev</button>
+        <div class="cal-month-title" id="cal-title"></div>
+        <button class="cal-nav-btn" onclick="calNav(1)">Next →</button>
+      </div>
+      <div class="cal-grid-header" id="cal-header"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Celebration overlay -->
+<div id="celebration"><div class="celebrate-emoji" id="celebrate-emoji"></div></div>
+
+<!-- Modals rendered by JS -->
+<div id="modal-root"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONFIG — point WORKER_URL at your deployed Cloudflare Worker
+// ════════════════════════════════════════════════════════════
+const WORKER_URL = 'https://YOUR_WORKER.workers.dev';
+// If no worker deployed, app works offline-only (no sync indicator shown)
+
+// ─── PWA Manifest (injected) ──────────────────────────────
+const manifestData = {
+  name: 'Tudo – Collaborative Lists',
+  short_name: 'Tudo',
+  start_url: '/',
+  display: 'standalone',
+  background_color: '#0f0f11',
+  theme_color: '#0f0f11',
+  icons: [{ src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>", sizes: '192x192', type: 'image/svg+xml' }]
+};
+const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
+document.getElementById('manifest-link').href = URL.createObjectURL(manifestBlob);
+
+// ─── State ────────────────────────────────────────────────
+let lists = {}; // { listId: { name, roomId } }
+let activeListId = null;
+let currentView = 'lists';
+let calYear, calMonth;
+let plugins = { categoryGroup: false, finishRewards: false };
+let ydocs = {}; // { listId: Y.Doc }
+let syncTimers = {};
+
+const now = new Date();
+calYear = now.getFullYear();
+calMonth = now.getMonth();
+
+// ─── Persistence ──────────────────────────────────────────
+function save() {
+  localStorage.setItem('tudo_lists', JSON.stringify(lists));
+  localStorage.setItem('tudo_plugins', JSON.stringify(plugins));
+  localStorage.setItem('tudo_active', activeListId);
+}
+
+function load() {
+  try {
+    lists = JSON.parse(localStorage.getItem('tudo_lists') || '{}');
+    plugins = JSON.parse(localStorage.getItem('tudo_plugins') || '{"categoryGroup":false,"finishRewards":false}');
+    activeListId = localStorage.getItem('tudo_active');
+  } catch(e) {
+    lists = {}; plugins = { categoryGroup: false, finishRewards: false };
+  }
+}
+
+// ─── Room ID (URL-based collaboration) ───────────────────
+function getRoomFromURL() {
+  const hash = location.hash.slice(1);
+  if (hash && hash.startsWith('room:')) return hash.slice(5);
+  return null;
+}
+
+function generateId(len = 10) {
+  return Math.random().toString(36).slice(2, 2 + len);
+}
+
+// ─── Yjs CRDT per list ───────────────────────────────────
+function getOrCreateYDoc(listId) {
+  if (ydocs[listId]) return ydocs[listId];
+  if (!window.Y) { console.error("Yjs not loaded"); return null; }
+  const doc = new Y.Doc();
+  ydocs[listId] = doc;
+
+  // Load persisted state
+  const stored = localStorage.getItem('tudo_ydoc_' + listId);
+  if (stored) {
+    try {
+      const arr = Uint8Array.from(JSON.parse(stored));
+      Y.applyUpdate(doc, arr);
+    } catch(e) {}
+  }
+
+  // Persist on change
+  doc.on('update', (update) => {
+    const state = Y.encodeStateAsUpdate(doc);
+    localStorage.setItem('tudo_ydoc_' + listId, JSON.stringify(Array.from(state)));
+    scheduleSync(listId);
+    renderTodos();
+    renderListsNav();
+    updateProgress();
+    if (currentView === 'calendar') renderCalendar();
+  });
+
+  return doc;
+}
+
+function getYTodos(listId) {
+  const doc = getOrCreateYDoc(listId);
+  return doc.getArray('todos');
+}
+
+function getYCalendar(listId) {
+  const doc = getOrCreateYDoc(listId);
+  return doc.getMap('calendar'); // date -> array of {id,text,done}
+}
+
+// ─── Sync to/from Worker ──────────────────────────────────
+function setSyncStatus(state) {
+  const dot = document.getElementById('sync-dot');
+  const label = document.getElementById('sync-label');
+  if (!dot) return;
+  dot.className = 'sync-dot ' + state;
+  label.textContent = state === 'synced' ? 'synced' : state === 'syncing' ? 'syncing…' : state === 'error' ? 'error' : 'offline';
+}
+
+async function pushUpdate(listId) {
+  const list = lists[listId];
+  if (!list || !list.roomId || WORKER_URL.includes('YOUR_WORKER')) return;
+  const doc = getOrCreateYDoc(listId);
+  const update = Y.encodeStateAsUpdate(doc);
+  try {
+    setSyncStatus('syncing');
+    const r = await fetch(WORKER_URL + '/' + list.roomId, {
+      method: 'POST',
+      body: update,
+      headers: { 'Content-Type': 'application/octet-stream' }
+    });
+    if (r.ok) setSyncStatus('synced');
+    else setSyncStatus('error');
+  } catch(e) { setSyncStatus('error'); }
+}
+
+async function pullUpdate(listId) {
+  const list = lists[listId];
+  if (!list || !list.roomId || WORKER_URL.includes('YOUR_WORKER')) return;
+  try {
+    const r = await fetch(WORKER_URL + '/' + list.roomId);
+    if (r.status === 204) return;
+    if (r.ok) {
+      const buf = await r.arrayBuffer();
+      const doc = getOrCreateYDoc(listId);
+      Y.applyUpdate(doc, new Uint8Array(buf));
+    }
+  } catch(e) {}
+}
+
+function scheduleSync(listId) {
+  clearTimeout(syncTimers[listId]);
+  syncTimers[listId] = setTimeout(() => pushUpdate(listId), 800);
+}
+
+// ─── List Management ──────────────────────────────────────
+function createList(name, roomId = null) {
+  const id = generateId();
+  roomId = roomId || generateId(12);
+  lists[id] = { name: name || 'Untitled', roomId };
+  save();
+  getOrCreateYDoc(id); // init
+  return id;
+}
+
+function ensureDefaultList() {
+  if (Object.keys(lists).length === 0) {
+    const id = createList('My List');
+    activeListId = id;
+    save();
+  }
+  if (!activeListId || !lists[activeListId]) {
+    activeListId = Object.keys(lists)[0];
+    save();
+  }
+}
+
+function switchList(id) {
+  activeListId = id;
+  save();
+  document.getElementById('header-title').textContent = lists[id]?.name || 'List';
+  renderListsNav();
+  renderTodos();
+  updateProgress();
+  pullUpdate(id);
+  if (window.innerWidth <= 640) document.getElementById('sidebar').classList.remove('open');
+}
+
+// ─── Add / Toggle / Delete Todo ──────────────────────────
+function addTodo() {
+  const inp = document.getElementById('todo-input');
+  const text = inp.value.trim();
+  if (!text || !activeListId) return;
+  const todos = getYTodos(activeListId);
+  const doc = getOrCreateYDoc(activeListId);
+  doc.transact(() => {
+    todos.push([{ id: generateId(8), text, done: false, created: Date.now() }]);
+  });
+  inp.value = '';
+  inp.focus();
+}
+
+document.getElementById('todo-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addTodo();
+});
+
+function toggleTodo(listId, idx) {
+  const todos = getYTodos(listId);
+  const item = todos.get(idx);
+  const doc = getOrCreateYDoc(listId);
+  doc.transact(() => {
+    todos.delete(idx, 1);
+    todos.insert(idx, [{ ...item, done: !item.done }]);
+  });
+  checkFinishReward(listId);
+}
+
+function deleteTodo(listId, idx) {
+  const todos = getYTodos(listId);
+  const doc = getOrCreateYDoc(listId);
+  doc.transact(() => todos.delete(idx, 1));
+}
+
+function editTodo(listId, idx, newText) {
+  const todos = getYTodos(listId);
+  const item = todos.get(idx);
+  const doc = getOrCreateYDoc(listId);
+  doc.transact(() => {
+    todos.delete(idx, 1);
+    todos.insert(idx, [{ ...item, text: newText }]);
+  });
+}
+
+// ─── Finish Reward ────────────────────────────────────────
+const CELEBRATE_EMOJIS = ['🎉','🥳','✨','🎊','🏆','💫','🌟','🎆'];
+let celebrateTimeout;
+
+function checkFinishReward(listId) {
+  if (!plugins.finishRewards) return;
+  const todos = getYTodos(listId);
+  const arr = todos.toArray();
+  if (arr.length === 0) return;
+  const allDone = arr.every(t => t.done);
+  if (allDone) {
+    celebrate();
+  }
+}
+
+function celebrate() {
+  const el = document.getElementById('celebration');
+  const emoji = document.getElementById('celebrate-emoji');
+  emoji.textContent = CELEBRATE_EMOJIS[Math.floor(Math.random() * CELEBRATE_EMOJIS.length)];
+  el.classList.add('active');
+  clearTimeout(celebrateTimeout);
+  celebrateTimeout = setTimeout(() => el.classList.remove('active'), 2800);
+}
+
+// ─── Category Grouping ────────────────────────────────────
+const CATEGORY_KEYWORDS = {
+  '🥦 Produce':    ['apple','banana','orange','grape','lettuce','spinach','kale','tomato','onion','garlic','carrot','broccoli','pepper','potato','avocado','lemon','lime','berry','berries','mango','celery','cucumber','zucchini','mushroom','herbs','basil','cilantro','parsley'],
+  '🥩 Meat & Fish':['chicken','beef','pork','fish','salmon','tuna','shrimp','turkey','lamb','steak','bacon','sausage','meat'],
+  '🧀 Dairy':      ['milk','cheese','yogurt','butter','cream','egg','eggs','dairy'],
+  '🍞 Bakery':     ['bread','bagel','muffin','cake','cookie','tortilla','bun','roll','pastry','croissant'],
+  '🥫 Pantry':     ['pasta','rice','bean','beans','lentil','soup','can','canned','sauce','oil','vinegar','spice','flour','sugar','salt','cereal','oat','oats','jam','peanut'],
+  '🧴 Household':  ['soap','shampoo','toothpaste','detergent','toilet','paper','towel','cleaner','bleach','trash','bag','bags','dishwasher'],
+  '🥤 Drinks':     ['water','juice','milk','coffee','tea','soda','wine','beer','drink','drinks','beverage'],
+  '🧊 Frozen':     ['frozen','ice cream','pizza','fries'],
+};
+
+function categorize(text) {
+  const lower = text.toLowerCase();
+  for (const [cat, words] of Object.entries(CATEGORY_KEYWORDS)) {
+    if (words.some(w => lower.includes(w))) return cat;
+  }
+  return '📋 Other';
+}
+
+// ─── Render Todos ─────────────────────────────────────────
+function renderTodos() {
+  if (!activeListId || currentView !== 'lists') return;
+  const container = document.getElementById('todos-container');
+  const todos = getYTodos(activeListId);
+  const arr = todos.toArray();
+
+  if (arr.length === 0) {
+    container.innerHTML = `<div class="empty-state"><div class="es-icon">📝</div><div class="es-title">No tasks yet</div><div class="es-desc">Add your first task above</div></div>`;
+    return;
+  }
+
+  if (plugins.categoryGroup) {
+    // Group by category
+    const groups = {};
+    arr.forEach((item, idx) => {
+      const cat = categorize(item.text);
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push({ ...item, idx });
+    });
+
+    let html = '';
+    for (const [cat, items] of Object.entries(groups)) {
+      html += `<div class="category-header">${cat}</div>`;
+      items.forEach(item => {
+        html += todoHTML(item, item.idx);
+      });
+    }
+    container.innerHTML = html;
+  } else {
+    container.innerHTML = arr.map((item, idx) => todoHTML(item, idx)).join('');
+  }
+
+  attachTodoListeners();
+}
+
+function todoHTML(item, idx) {
+  return `<div class="todo-item ${item.done ? 'done' : ''}" data-idx="${idx}">
+    <button class="todo-check ${item.done ? 'checked' : ''}" data-idx="${idx}" onclick="toggleTodo('${activeListId}', ${idx})"></button>
+    <div class="todo-text" contenteditable="true" data-idx="${idx}" spellcheck="true">${escHtml(item.text)}</div>
+    <div class="todo-actions">
+      <button class="todo-act-btn" onclick="deleteTodo('${activeListId}', ${idx})" title="Delete">✕</button>
+    </div>
+  </div>`;
+}
+
+function escHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function attachTodoListeners() {
+  document.querySelectorAll('.todo-text').forEach(el => {
+    el.addEventListener('blur', () => {
+      const idx = parseInt(el.dataset.idx);
+      const newText = el.textContent.trim();
+      if (newText) editTodo(activeListId, idx, newText);
+      else renderTodos();
+    });
+    el.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+    });
+  });
+}
+
+function updateProgress() {
+  if (!activeListId) return;
+  const todos = getYTodos(activeListId);
+  const arr = todos.toArray();
+  const done = arr.filter(t => t.done).length;
+  const total = arr.length;
+  const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+  document.getElementById('progress-fill').style.width = pct + '%';
+  document.getElementById('progress-label').textContent = `${done} / ${total}`;
+}
+
+// ─── Lists Nav ────────────────────────────────────────────
+function renderListsNav() {
+  const nav = document.getElementById('lists-nav');
+  nav.innerHTML = Object.entries(lists).map(([id, list]) => {
+    const todos = getYTodos(id);
+    const count = todos.length;
+    const active = id === activeListId ? 'active' : '';
+    return `<div class="list-item ${active}" onclick="switchList('${id}')">
+      <div class="li-dot"></div>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(list.name)}</span>
+      <span class="li-count">${count}</span>
+    </div>`;
+  }).join('');
+}
+
+// ─── New List Modal ───────────────────────────────────────
+document.getElementById('new-list-btn').onclick = () => {
+  openModal(`<div class="modal-title">New list</div>
+    <input class="modal-input" id="nl-name" placeholder="List name…" autocomplete="off"/>
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="createAndSwitch()">Create</button>
+    </div>`);
+  setTimeout(() => document.getElementById('nl-name')?.focus(), 50);
+  document.getElementById('nl-name').addEventListener('keydown', e => {
+    if (e.key === 'Enter') createAndSwitch();
+  });
+};
+
+window.createAndSwitch = function() {
+  const name = document.getElementById('nl-name')?.value.trim();
+  if (!name) return;
+  const id = createList(name);
+  activeListId = id;
+  save();
+  closeModal();
+  renderListsNav();
+  renderTodos();
+  updateProgress();
+  document.getElementById('header-title').textContent = name;
+};
+
+// ─── Share Modal ──────────────────────────────────────────
+window.openShareModal = function() {
+  const list = lists[activeListId];
+  if (!list) return;
+  const shareUrl = location.origin + location.pathname + '#room:' + list.roomId;
+  openModal(`<div class="modal-title">Share list</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:12px">Anyone with this link can collaborate in real time — no sign up needed.</p>
+    <div class="share-link-box">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${shareUrl}</span>
+      <button class="share-copy-btn" id="copy-btn" onclick="copyShareLink('${shareUrl}')">Copy</button>
+    </div>
+    <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal()">Done</button></div>`);
+};
+
+window.copyShareLink = function(url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const btn = document.getElementById('copy-btn');
+    if (btn) { btn.textContent = 'Copied!'; setTimeout(() => { if(btn) btn.textContent = 'Copy'; }, 2000); }
+  });
+};
+
+// ─── Plugins Modal ────────────────────────────────────────
+const PLUGIN_DEFS = [
+  {
+    id: 'categoryGroup',
+    icon: '🏷️',
+    name: 'Category Grouper',
+    desc: 'Groups similar items together (great for grocery lists). Detects produce, dairy, meat, household items, and more.'
+  },
+  {
+    id: 'finishRewards',
+    icon: '🎉',
+    name: 'Finish Rewards',
+    desc: 'When you complete every task on a list, a celebratory emoji bursts onto the screen!'
+  }
+];
+
+window.openPluginsModal = function() {
+  const cards = PLUGIN_DEFS.map(p => `
+    <div class="plugin-card ${plugins[p.id] ? 'enabled' : ''}" id="pcard-${p.id}">
+      <div class="plugin-icon">${p.icon}</div>
+      <div class="plugin-info">
+        <div class="plugin-name">${p.name}</div>
+        <div class="plugin-desc">${p.desc}</div>
+      </div>
+      <button class="plugin-toggle ${plugins[p.id] ? 'on' : ''}" id="ptoggle-${p.id}" onclick="togglePlugin('${p.id}')"></button>
+    </div>`).join('');
+
+  openModal(`<div class="modal-title">⚙ Plugins</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Enable or disable plugins anytime. Changes apply instantly.</p>
+    ${cards}
+    <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal()">Done</button></div>`);
+};
+
+window.togglePlugin = function(id) {
+  plugins[id] = !plugins[id];
+  save();
+  const toggle = document.getElementById('ptoggle-' + id);
+  const card = document.getElementById('pcard-' + id);
+  if (toggle) toggle.classList.toggle('on', plugins[id]);
+  if (card) card.classList.toggle('enabled', plugins[id]);
+  renderTodos();
+};
+
+// ─── Calendar ─────────────────────────────────────────────
+const DAY_NAMES = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function renderCalendar() {
+  document.getElementById('cal-title').textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
+
+  const header = document.getElementById('cal-header');
+  header.innerHTML = DAY_NAMES.map(d => `<div class="cal-day-name">${d}</div>`).join('');
+
+  const grid = document.getElementById('cal-grid');
+  const firstDay = new Date(calYear, calMonth, 1).getDay();
+  const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+  const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+  const today = new Date();
+
+  let cells = '';
+
+  // Prev month overflow
+  for (let i = firstDay - 1; i >= 0; i--) {
+    const d = daysInPrev - i;
+    cells += calCell(calYear, calMonth - 1, d, true, today);
+  }
+  // Current month
+  for (let d = 1; d <= daysInMonth; d++) {
+    cells += calCell(calYear, calMonth, d, false, today);
+  }
+  // Next month overflow
+  const total = firstDay + daysInMonth;
+  const nextCells = total % 7 === 0 ? 0 : 7 - (total % 7);
+  for (let d = 1; d <= nextCells; d++) {
+    cells += calCell(calYear, calMonth + 1, d, true, today);
+  }
+
+  grid.innerHTML = cells;
+}
+
+function calCell(year, month, day, otherMonth, today) {
+  const realMonth = ((month % 12) + 12) % 12;
+  const realYear = year + Math.floor(month / 12);
+  const dateKey = `${realYear}-${String(realMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+  const isToday = today.getFullYear() === realYear && today.getMonth() === realMonth && today.getDate() === day;
+
+  // Collect all cal todos for this date across all lists
+  const allTodos = getCalTodosForDate(dateKey);
+  const hasTodos = allTodos.length > 0;
+
+  const previews = allTodos.slice(0, 2).map(t =>
+    `<div class="cal-todo-preview ${t.done ? 'done-prev' : ''}">${escHtml(t.text.substring(0, 18))}${t.text.length > 18 ? '…' : ''}</div>`
+  ).join('');
+
+  return `<div class="cal-cell ${otherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${hasTodos ? 'has-todos' : ''}"
+    onclick="openCalDateModal('${dateKey}')">
+    <div class="cal-date">${day}</div>
+    ${previews}
+  </div>`;
+}
+
+function getCalTodosForDate(dateKey) {
+  const result = [];
+  for (const listId of Object.keys(lists)) {
+    const cal = getYCalendar(listId);
+    const dayData = cal.get(dateKey);
+    if (dayData && dayData.todos) {
+      dayData.todos.forEach(t => result.push({ ...t, listName: lists[listId]?.name }));
+    }
+  }
+  return result;
+}
+
+window.calNav = function(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+};
+
+// ─── Calendar Date Modal ──────────────────────────────────
+window.openCalDateModal = function(dateKey) {
+  const [y, m, d] = dateKey.split('-');
+  const label = `${MONTH_NAMES[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+
+  // Get existing todos for this date (from active list's calendar)
+  const cal = getYCalendar(activeListId);
+  const existing = cal.get(dateKey) || { todos: [] };
+
+  function buildModal() {
+    const items = (cal.get(dateKey) || { todos: [] }).todos;
+    const itemsHTML = items.length ? items.map((t, i) => `
+      <div class="cal-modal-todo">
+        <button class="todo-check ${t.done ? 'checked' : ''}" onclick="calToggleTodo('${dateKey}', ${i})"></button>
+        <span style="flex:1;${t.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.text)}</span>
+        <button class="todo-act-btn" onclick="calDeleteTodo('${dateKey}', ${i})">✕</button>
+      </div>`).join('') : `<p style="color:var(--text3);font-size:13px;padding:8px 0">No tasks for this day yet.</p>`;
+
+    openModal(`<div class="modal-title">📅 ${label}</div>
+      <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Tasks from: <strong>${escHtml(lists[activeListId]?.name || 'current list')}</strong></p>
+      <div id="cal-date-todos">${itemsHTML}</div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <input class="modal-input" id="cal-todo-inp" placeholder="Add task for this day…" style="margin-bottom:0;flex:1" autocomplete="off"/>
+        <button class="modal-btn primary" onclick="calAddTodo('${dateKey}')">Add</button>
+      </div>
+      <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal();renderCalendar()">Done</button></div>`);
+    setTimeout(() => {
+      const inp = document.getElementById('cal-todo-inp');
+      if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') calAddTodo(dateKey); });
+    }, 50);
+  }
+
+  buildModal();
+  window._calDateKey = dateKey;
+};
+
+window.calAddTodo = function(dateKey) {
+  const inp = document.getElementById('cal-todo-inp');
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (!text) return;
+  const cal = getYCalendar(activeListId);
+  const doc = getOrCreateYDoc(activeListId);
+  doc.transact(() => {
+    const existing = cal.get(dateKey) || { todos: [] };
+    const newTodos = [...existing.todos, { id: generateId(8), text, done: false }];
+    cal.set(dateKey, { todos: newTodos });
+  });
+  inp.value = '';
+  // Re-render modal body
+  openCalDateModal(dateKey);
+};
+
+window.calToggleTodo = function(dateKey, idx) {
+  const cal = getYCalendar(activeListId);
+  const doc = getOrCreateYDoc(activeListId);
+  doc.transact(() => {
+    const existing = cal.get(dateKey) || { todos: [] };
+    const newTodos = existing.todos.map((t, i) => i === idx ? { ...t, done: !t.done } : t);
+    cal.set(dateKey, { todos: newTodos });
+  });
+  openCalDateModal(dateKey);
+};
+
+window.calDeleteTodo = function(dateKey, idx) {
+  const cal = getYCalendar(activeListId);
+  const doc = getOrCreateYDoc(activeListId);
+  doc.transact(() => {
+    const existing = cal.get(dateKey) || { todos: [] };
+    const newTodos = existing.todos.filter((_, i) => i !== idx);
+    cal.set(dateKey, { todos: newTodos });
+  });
+  openCalDateModal(dateKey);
+};
+
+// ─── View Switching ───────────────────────────────────────
+window.switchView = function(view) {
+  currentView = view;
+  document.getElementById('todo-view').classList.toggle('active', view === 'lists');
+  document.getElementById('calendar-view').style.display = view === 'calendar' ? 'block' : 'none';
+  document.getElementById('nav-lists').classList.toggle('active', view === 'lists');
+  document.getElementById('nav-calendar').classList.toggle('active', view === 'calendar');
+  if (view === 'calendar') renderCalendar();
+  if (view === 'lists') { renderTodos(); updateProgress(); }
+  if (window.innerWidth <= 640) document.getElementById('sidebar').classList.remove('open');
+};
+
+// ─── Modal System ─────────────────────────────────────────
+window.openModal = function(html) {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `<div class="modal-overlay" onclick="overlayClose(event)"><div class="modal">${html}</div></div>`;
+};
+
+window.closeModal = function() {
+  document.getElementById('modal-root').innerHTML = '';
+};
+
+window.overlayClose = function(e) {
+  if (e.target.classList.contains('modal-overlay')) closeModal();
+};
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ─── Sidebar toggle (mobile) ──────────────────────────────
+window.toggleSidebar = function() {
+  document.getElementById('sidebar').classList.toggle('open');
+};
+
+// ─── URL-based room joining ───────────────────────────────
+function handleRoomFromURL() {
+  const roomId = getRoomFromURL();
+  if (!roomId) return false;
+
+  // Check if we already have a list with this roomId
+  const existing = Object.entries(lists).find(([, l]) => l.roomId === roomId);
+  if (existing) {
+    switchList(existing[0]);
+    return true;
+  }
+
+  // Create a new list linked to this room
+  const id = generateId();
+  lists[id] = { name: 'Shared List', roomId };
+  save();
+  getOrCreateYDoc(id);
+  activeListId = id;
+  save();
+  pullUpdate(id);
+  return true;
+}
+
+// ─── Init (deferred until Yjs ESM ready) ─────────────────
+function appInit() {
+  load();
+  handleRoomFromURL();
+  ensureDefaultList();
+  renderListsNav();
+  switchList(activeListId);
+  setSyncStatus(WORKER_URL.includes('YOUR_WORKER') ? 'offline' : 'synced');
+
+  setInterval(() => {
+    if (activeListId && lists[activeListId]?.roomId) pullUpdate(activeListId);
+  }, 10000);
+
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE = 'tudo-v1';
+      self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/']))));
+      self.addEventListener('fetch', e => e.respondWith(
+        caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+          return res;
+        }).catch(() => caches.match('/')))
+      ));
+    `;
+    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+    navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+  }
+}
+
+// Yjs loads as ESM module → fires 'yjs-ready' once window.Y is set.
+if (window.Y) {
+  appInit();
+} else {
+  window.addEventListener('yjs-ready', appInit, { once: true });
+  // Safety fallback if ESM blocked (e.g. strict CSP / offline)
+  setTimeout(() => { if (!window._yjsReady) { console.warn('Yjs timeout — running without CRDT'); appInit(); } }, 4000);
+}
+</script>
+</body>
+</html>
