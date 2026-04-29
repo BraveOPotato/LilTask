@@ -1,0 +1,22 @@
+name = "liltask-sync"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# ── KV namespace ──────────────────────────────────────────────────────────────
+# 1. Create it:   wrangler kv:namespace create TODO_KV
+# 2. Paste the returned id below (preview_id is for `wrangler dev`)
+# 3. Deploy:      wrangler deploy
+[[kv_namespaces]]
+binding     = "TODO_KV"
+id          = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+preview_id  = "REPLACE_WITH_YOUR_KV_PREVIEW_ID"
+
+# ── Routes (optional) ─────────────────────────────────────────────────────────
+# Uncomment + fill in if you want a custom domain instead of *.workers.dev
+# [[routes]]
+# pattern = "sync.yourdomain.com/*"
+# zone_name = "yourdomain.com"
+
+# ── Observability ─────────────────────────────────────────────────────────────
+[observability]
+enabled = true
