@@ -35,7 +35,7 @@ html, body {
 }
 
 /* ─── Layout ─── */
-#app { display: flex; height: 100vh; overflow: hidden; }
+#app { display: flex; height: 100vh; height: 100dvh; overflow: hidden; }
 
 #sidebar {
 width: var(--sidebar);
@@ -896,8 +896,14 @@ animation: fadeIn 0.2s ease;
     }
     #todos-container {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     padding: 16px 16px 0;
+    }
+    #todo-bottom {
+    flex-shrink: 0;
+    gap: 0;
+    padding-top: 0;
     }
     .todo-input-wrap {
         margin-bottom: 0;
