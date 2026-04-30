@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f0f11"/>
 <meta name="description" content="Collaborative todo lists with real-time sync"/>
 <link rel="manifest" id="manifest-link"/>
-<title>Tudo — Collaborative Lists</title>
+<title>LilTask — Collaborative Lists</title>
 
 <!-- Yjs CRDT via ESM, exposed as window.Y -->
 <script type="module">
@@ -696,11 +696,89 @@ html, body {
 }
 .cal-modal-todo:last-child { border-bottom: none; }
 
+
+/* ─── Drag to reorder ─── */
+.todo-item { cursor: default; user-select: none; }
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  color: var(--text3);
+  cursor: grab;
+  font-size: 14px;
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity 0.15s;
+  touch-action: none;
+}
+.todo-item:hover .drag-handle { opacity: 1; }
+.todo-item.dragging {
+  opacity: 0.4;
+  background: var(--bg4);
+  border-color: var(--accent);
+}
+.todo-item.drag-over {
+  border-top: 2px solid var(--accent);
+}
+
+/* ─── Section headers ─── */
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--text3);
+}
+.section-header:first-child { margin-top: 0; }
+.section-header::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+.section-header .sh-count {
+  background: var(--bg4);
+  color: var(--text3);
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 99px;
+}
+
+/* Deadline badge */
+.due-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 99px;
+  background: rgba(124,106,255,0.15);
+  color: var(--accent);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.due-badge.overdue { background: rgba(255,92,124,0.15); color: var(--red); }
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--bg4); border-radius: 99px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--border); }
+
+#sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 49;
+  backdrop-filter: blur(2px);
+  animation: fadeIn 0.2s ease;
+}
+#sidebar-backdrop.active { display: block; }
 
 @media (max-width: 640px) {
   #menu-toggle { display: flex; }
@@ -718,9 +796,11 @@ html, body {
 <body>
 
 <div id="app">
+  <!-- Sidebar backdrop (mobile) -->
+  <div id="sidebar-backdrop" onclick="closeSidebar()"></div>
   <!-- Sidebar -->
   <nav id="sidebar">
-    <div class="sidebar-logo">✦ <span>Tudo</span></div>
+    <div class="sidebar-logo">✦ <span>LilTask</span></div>
 
     <div class="sidebar-section">Lists</div>
     <div id="lists-nav"></div>
@@ -795,8 +875,8 @@ const WORKER_URL = 'https://YOUR_WORKER.workers.dev';
 
 // ─── PWA Manifest (injected) ──────────────────────────────
 const manifestData = {
-  name: 'Tudo – Collaborative Lists',
-  short_name: 'Tudo',
+  name: 'LilTask – Collaborative Lists',
+  short_name: 'LilTask',
   start_url: '/',
   display: 'standalone',
   background_color: '#0f0f11',
@@ -821,16 +901,16 @@ calMonth = now.getMonth();
 
 // ─── Persistence ──────────────────────────────────────────
 function save() {
-  localStorage.setItem('tudo_lists', JSON.stringify(lists));
-  localStorage.setItem('tudo_plugins', JSON.stringify(plugins));
-  localStorage.setItem('tudo_active', activeListId);
+  localStorage.setItem('liltask_lists', JSON.stringify(lists));
+  localStorage.setItem('liltask_plugins', JSON.stringify(plugins));
+  localStorage.setItem('liltask_active', activeListId);
 }
 
 function load() {
   try {
-    lists = JSON.parse(localStorage.getItem('tudo_lists') || '{}');
-    plugins = JSON.parse(localStorage.getItem('tudo_plugins') || '{"categoryGroup":false,"finishRewards":false}');
-    activeListId = localStorage.getItem('tudo_active');
+    lists = JSON.parse(localStorage.getItem('liltask_lists') || '{}');
+    plugins = JSON.parse(localStorage.getItem('liltask_plugins') || '{"categoryGroup":false,"finishRewards":false}');
+    activeListId = localStorage.getItem('liltask_active');
   } catch(e) {
     lists = {}; plugins = { categoryGroup: false, finishRewards: false };
   }
@@ -855,7 +935,7 @@ function getOrCreateYDoc(listId) {
   ydocs[listId] = doc;
 
   // Load persisted state
-  const stored = localStorage.getItem('tudo_ydoc_' + listId);
+  const stored = localStorage.getItem('liltask_ydoc_' + listId);
   if (stored) {
     try {
       const arr = Uint8Array.from(JSON.parse(stored));
@@ -866,7 +946,7 @@ function getOrCreateYDoc(listId) {
   // Persist on change
   doc.on('update', (update) => {
     const state = Y.encodeStateAsUpdate(doc);
-    localStorage.setItem('tudo_ydoc_' + listId, JSON.stringify(Array.from(state)));
+    localStorage.setItem('liltask_ydoc_' + listId, JSON.stringify(Array.from(state)));
     scheduleSync(listId);
     renderTodos();
     renderListsNav();
@@ -882,9 +962,9 @@ function getYTodos(listId) {
   return doc.getArray('todos');
 }
 
-function getYCalendar(listId) {
-  const doc = getOrCreateYDoc(listId);
-  return doc.getMap('calendar'); // date -> array of {id,text,done}
+// getYCalendar removed — calendar data lives in the main Y.Array (dueDate field)
+function getTodosForDate(listId, dateKey) {
+  return getYTodos(listId).toArray().filter(t => t.dueDate === dateKey);
 }
 
 // ─── Sync to/from Worker ──────────────────────────────────
@@ -962,7 +1042,7 @@ function switchList(id) {
   renderTodos();
   updateProgress();
   pullUpdate(id);
-  if (window.innerWidth <= 640) document.getElementById('sidebar').classList.remove('open');
+  if (window.innerWidth <= 640) closeSidebar();
 }
 
 // ─── Add / Toggle / Delete Todo ──────────────────────────
@@ -984,6 +1064,7 @@ document.getElementById('todo-input').addEventListener('keydown', e => {
 });
 
 function toggleTodo(listId, idx) {
+  // Single source: just update Y.Array — calendar view queries same array
   const todos = getYTodos(listId);
   const item = todos.get(idx);
   const doc = getOrCreateYDoc(listId);
@@ -995,9 +1076,10 @@ function toggleTodo(listId, idx) {
 }
 
 function deleteTodo(listId, idx) {
+  // Single source: just delete from Y.Array — calendar view queries same array
   const todos = getYTodos(listId);
   const doc = getOrCreateYDoc(listId);
-  doc.transact(() => todos.delete(idx, 1));
+  doc.transact(() => { todos.delete(idx, 1); });
 }
 
 function editTodo(listId, idx, newText) {
@@ -1007,6 +1089,18 @@ function editTodo(listId, idx, newText) {
   doc.transact(() => {
     todos.delete(idx, 1);
     todos.insert(idx, [{ ...item, text: newText }]);
+  });
+}
+
+function reorderTodo(listId, fromIdx, toIdx) {
+  const todos = getYTodos(listId);
+  const arr = todos.toArray();
+  const item = arr[fromIdx];
+  const doc = getOrCreateYDoc(listId);
+  doc.transact(() => {
+    todos.delete(fromIdx, 1);
+    const insertAt = fromIdx < toIdx ? toIdx : toIdx;
+    todos.insert(insertAt, [item]);
   });
 }
 
@@ -1066,34 +1160,65 @@ function renderTodos() {
     return;
   }
 
-  if (plugins.categoryGroup) {
-    // Group by category
-    const groups = {};
-    arr.forEach((item, idx) => {
-      const cat = categorize(item.text);
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push({ ...item, idx });
-    });
+  const global = arr.map((item, idx) => ({ ...item, idx })).filter(t => !t.dueDate);
+  const dated  = arr.map((item, idx) => ({ ...item, idx })).filter(t => !!t.dueDate);
 
-    let html = '';
-    for (const [cat, items] of Object.entries(groups)) {
-      html += `<div class="category-header">${cat}</div>`;
-      items.forEach(item => {
-        html += todoHTML(item, item.idx);
+  // Sort dated by dueDate ascending
+  dated.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+  let html = '';
+
+  if (global.length > 0) {
+    html += `<div class="section-header">📋 Global Todos <span class="sh-count">${global.length}</span></div>`;
+    if (plugins.categoryGroup) {
+      const groups = {};
+      global.forEach(item => {
+        const cat = categorize(item.text);
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(item);
       });
+      for (const [cat, items] of Object.entries(groups)) {
+        html += `<div class="category-header">${cat}</div>`;
+        items.forEach(item => { html += todoHTML(item, item.idx); });
+      }
+    } else {
+      global.forEach(item => { html += todoHTML(item, item.idx); });
     }
-    container.innerHTML = html;
-  } else {
-    container.innerHTML = arr.map((item, idx) => todoHTML(item, idx)).join('');
   }
 
+  if (dated.length > 0) {
+    html += `<div class="section-header">📅 Todos with Dues <span class="sh-count">${dated.length}</span></div>`;
+    dated.forEach(item => { html += todoHTML(item, item.idx); });
+  }
+
+  container.innerHTML = html;
   attachTodoListeners();
+  attachDragListeners();
+}
+
+function dueBadgeHTML(item) {
+  if (!item.dueDate) return '';
+  const [y,m,d] = item.dueDate.split('-').map(Number);
+  const due = new Date(y, m-1, d);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const diff = Math.round((due - today) / 86400000);
+  let label, cls = '';
+  if (diff < 0) { label = 'Overdue'; cls = 'overdue'; }
+  else if (diff === 0) { label = 'Today'; }
+  else if (diff === 1) { label = 'Tomorrow'; }
+  else {
+    const mo = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    label = mo[m-1] + ' ' + d;
+  }
+  return `<span class="due-badge ${cls}">${label}</span>`;
 }
 
 function todoHTML(item, idx) {
-  return `<div class="todo-item ${item.done ? 'done' : ''}" data-idx="${idx}">
+  return `<div class="todo-item ${item.done ? 'done' : ''}" data-idx="${idx}" draggable="true">
+    <div class="drag-handle" title="Drag to reorder">⣿</div>
     <button class="todo-check ${item.done ? 'checked' : ''}" data-idx="${idx}" onclick="toggleTodo('${activeListId}', ${idx})"></button>
     <div class="todo-text" contenteditable="true" data-idx="${idx}" spellcheck="true">${escHtml(item.text)}</div>
+    ${dueBadgeHTML(item)}
     <div class="todo-actions">
       <button class="todo-act-btn" onclick="deleteTodo('${activeListId}', ${idx})" title="Delete">✕</button>
     </div>
@@ -1114,6 +1239,68 @@ function attachTodoListeners() {
     });
     el.addEventListener('keydown', e => {
       if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+    });
+  });
+}
+
+function attachDragListeners() {
+  let dragIdx = null;
+  let overIdx = null;
+
+  document.querySelectorAll('#todos-container .todo-item').forEach(el => {
+    const handle = el.querySelector('.drag-handle');
+
+    // Desktop drag via handle
+    handle.addEventListener('mousedown', () => { el.draggable = true; });
+    el.addEventListener('dragstart', e => {
+      dragIdx = parseInt(el.dataset.idx);
+      el.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragend', () => {
+      el.classList.remove('dragging');
+      document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
+      if (dragIdx !== null && overIdx !== null && dragIdx !== overIdx) {
+        reorderTodo(activeListId, dragIdx, overIdx);
+      }
+      dragIdx = null; overIdx = null;
+      el.draggable = false;
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
+      overIdx = parseInt(el.dataset.idx);
+      if (overIdx !== dragIdx) el.classList.add('drag-over');
+    });
+
+    // Touch drag
+    let touchStartY = 0, touchDragIdx = null;
+    handle.addEventListener('touchstart', e => {
+      touchStartY = e.touches[0].clientY;
+      touchDragIdx = parseInt(el.dataset.idx);
+      el.classList.add('dragging');
+    }, { passive: true });
+    handle.addEventListener('touchmove', e => {
+      e.preventDefault();
+      const y = e.touches[0].clientY;
+      const els = [...document.querySelectorAll('#todos-container .todo-item')];
+      document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
+      const target = els.find(item => {
+        const r = item.getBoundingClientRect();
+        return y >= r.top && y <= r.bottom;
+      });
+      if (target) {
+        overIdx = parseInt(target.dataset.idx);
+        if (overIdx !== touchDragIdx) target.classList.add('drag-over');
+      }
+    }, { passive: false });
+    handle.addEventListener('touchend', () => {
+      el.classList.remove('dragging');
+      document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
+      if (touchDragIdx !== null && overIdx !== null && touchDragIdx !== overIdx) {
+        reorderTodo(activeListId, touchDragIdx, overIdx);
+      }
+      touchDragIdx = null; overIdx = null;
     });
   });
 }
@@ -1296,11 +1483,9 @@ function calCell(year, month, day, otherMonth, today) {
 function getCalTodosForDate(dateKey) {
   const result = [];
   for (const listId of Object.keys(lists)) {
-    const cal = getYCalendar(listId);
-    const dayData = cal.get(dateKey);
-    if (dayData && dayData.todos) {
-      dayData.todos.forEach(t => result.push({ ...t, listName: lists[listId]?.name }));
-    }
+    getYTodos(listId).toArray()
+      .filter(t => t.dueDate === dateKey)
+      .forEach(t => result.push({ ...t, listName: lists[listId]?.name }));
   }
   return result;
 }
@@ -1317,34 +1502,36 @@ window.openCalDateModal = function(dateKey) {
   const [y, m, d] = dateKey.split('-');
   const label = `${MONTH_NAMES[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
 
-  // Get existing todos for this date (from active list's calendar)
-  const cal = getYCalendar(activeListId);
-  const existing = cal.get(dateKey) || { todos: [] };
+  function buildModalHTML() {
+    // Single source: query Y.Array filtered by dueDate
+    const items = getYTodos(activeListId).toArray()
+      .map((t, i) => ({ ...t, _idx: i }))
+      .filter(t => t.dueDate === dateKey);
 
-  function buildModal() {
-    const items = (cal.get(dateKey) || { todos: [] }).todos;
-    const itemsHTML = items.length ? items.map((t, i) => `
-      <div class="cal-modal-todo">
-        <button class="todo-check ${t.done ? 'checked' : ''}" onclick="calToggleTodo('${dateKey}', ${i})"></button>
-        <span style="flex:1;${t.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.text)}</span>
-        <button class="todo-act-btn" onclick="calDeleteTodo('${dateKey}', ${i})">✕</button>
-      </div>`).join('') : `<p style="color:var(--text3);font-size:13px;padding:8px 0">No tasks for this day yet.</p>`;
+    const itemsHTML = items.length
+      ? items.map(t => `
+          <div class="cal-modal-todo" data-id="${t.id}">
+            <button class="todo-check ${t.done ? 'checked' : ''}" onclick="calToggleTodo('${dateKey}', '${t.id}')"></button>
+            <span style="flex:1;${t.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.text)}</span>
+            <button class="todo-act-btn" onclick="calDeleteTodo('${dateKey}', '${t.id}')">✕</button>
+          </div>`).join('')
+      : `<p style="color:var(--text3);font-size:13px;padding:8px 0">No tasks for this day yet.</p>`;
 
-    openModal(`<div class="modal-title">📅 ${label}</div>
-      <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Tasks from: <strong>${escHtml(lists[activeListId]?.name || 'current list')}</strong></p>
-      <div id="cal-date-todos">${itemsHTML}</div>
-      <div style="display:flex;gap:8px;margin-top:14px">
-        <input class="modal-input" id="cal-todo-inp" placeholder="Add task for this day…" style="margin-bottom:0;flex:1" autocomplete="off"/>
-        <button class="modal-btn primary" onclick="calAddTodo('${dateKey}')">Add</button>
-      </div>
-      <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal();renderCalendar()">Done</button></div>`);
-    setTimeout(() => {
-      const inp = document.getElementById('cal-todo-inp');
-      if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') calAddTodo(dateKey); });
-    }, 50);
+    return itemsHTML;
   }
 
-  buildModal();
+  openModal(`<div class="modal-title">📅 ${label}</div>
+    <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Tasks from: <strong>${escHtml(lists[activeListId]?.name || 'current list')}</strong></p>
+    <div id="cal-date-todos">${buildModalHTML()}</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <input class="modal-input" id="cal-todo-inp" placeholder="Add task for this day…" style="margin-bottom:0;flex:1" autocomplete="off"/>
+      <button class="modal-btn primary" onclick="calAddTodo('${dateKey}')">Add</button>
+    </div>
+    <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal();renderCalendar()">Done</button></div>`);
+  setTimeout(() => {
+    const inp = document.getElementById('cal-todo-inp');
+    if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') calAddTodo(dateKey); });
+  }, 50);
   window._calDateKey = dateKey;
 };
 
@@ -1353,38 +1540,77 @@ window.calAddTodo = function(dateKey) {
   if (!inp) return;
   const text = inp.value.trim();
   if (!text) return;
-  const cal = getYCalendar(activeListId);
   const doc = getOrCreateYDoc(activeListId);
+  const newId = generateId(8);
+  // Single write: Y.Array only — dueDate field drives everything
   doc.transact(() => {
-    const existing = cal.get(dateKey) || { todos: [] };
-    const newTodos = [...existing.todos, { id: generateId(8), text, done: false }];
-    cal.set(dateKey, { todos: newTodos });
+    getYTodos(activeListId).push([{ id: newId, text, done: false, dueDate: dateKey, calEntry: true, created: Date.now() }]);
   });
   inp.value = '';
-  // Re-render modal body
-  openCalDateModal(dateKey);
+  inp.focus();
+  // Patch modal DOM in-place (no re-open flash)
+  const listEl = document.getElementById('cal-date-todos');
+  if (listEl) {
+    const placeholder = listEl.querySelector('p');
+    if (placeholder) placeholder.remove();
+    const row = document.createElement('div');
+    row.className = 'cal-modal-todo';
+    row.dataset.id = newId;
+    row.style.cssText = 'opacity:0;transform:translateY(-4px);transition:opacity 0.18s ease,transform 0.18s ease';
+    row.innerHTML = `
+      <button class="todo-check" onclick="calToggleTodo('${dateKey}', '${newId}')"></button>
+      <span style="flex:1">${escHtml(text)}</span>
+      <button class="todo-act-btn" onclick="calDeleteTodo('${dateKey}', '${newId}')">✕</button>`;
+    listEl.appendChild(row);
+    requestAnimationFrame(() => { row.style.opacity = '1'; row.style.transform = 'translateY(0)'; });
+  }
 };
 
-window.calToggleTodo = function(dateKey, idx) {
-  const cal = getYCalendar(activeListId);
+window.calToggleTodo = function(dateKey, todoId) {
+  // Single source: find by id in Y.Array
+  const todos = getYTodos(activeListId);
+  const arr = todos.toArray();
+  const idx = arr.findIndex(t => t.id === todoId);
+  if (idx === -1) return;
+  const item = arr[idx];
+  const newDone = !item.done;
   const doc = getOrCreateYDoc(activeListId);
   doc.transact(() => {
-    const existing = cal.get(dateKey) || { todos: [] };
-    const newTodos = existing.todos.map((t, i) => i === idx ? { ...t, done: !t.done } : t);
-    cal.set(dateKey, { todos: newTodos });
+    todos.delete(idx, 1);
+    todos.insert(idx, [{ ...item, done: newDone }]);
   });
-  openCalDateModal(dateKey);
+  // Patch modal DOM in-place
+  const row = document.querySelector(`#cal-date-todos .cal-modal-todo[data-id="${todoId}"]`);
+  if (row) {
+    const btn = row.querySelector('.todo-check');
+    const span = row.querySelector('span');
+    if (btn) btn.classList.toggle('checked', newDone);
+    if (span) span.style.cssText = newDone ? 'flex:1;text-decoration:line-through;color:var(--text3)' : 'flex:1';
+  }
+  // List view auto-updates via Yjs update event → renderTodos()
 };
 
-window.calDeleteTodo = function(dateKey, idx) {
-  const cal = getYCalendar(activeListId);
+window.calDeleteTodo = function(dateKey, todoId) {
+  // Single source: find by id in Y.Array and delete
+  const todos = getYTodos(activeListId);
+  const arr = todos.toArray();
+  const idx = arr.findIndex(t => t.id === todoId);
+  if (idx === -1) return;
   const doc = getOrCreateYDoc(activeListId);
-  doc.transact(() => {
-    const existing = cal.get(dateKey) || { todos: [] };
-    const newTodos = existing.todos.filter((_, i) => i !== idx);
-    cal.set(dateKey, { todos: newTodos });
-  });
-  openCalDateModal(dateKey);
+  doc.transact(() => { todos.delete(idx, 1); });
+  // Animate row out of modal
+  const row = document.querySelector(`#cal-date-todos .cal-modal-todo[data-id="${todoId}"]`);
+  if (row) {
+    row.style.cssText += ';transition:opacity 0.15s ease,transform 0.15s ease;opacity:0;transform:translateX(8px)';
+    setTimeout(() => {
+      row.remove();
+      const listEl = document.getElementById('cal-date-todos');
+      if (listEl && listEl.querySelectorAll('.cal-modal-todo').length === 0) {
+        listEl.innerHTML = `<p style="color:var(--text3);font-size:13px;padding:8px 0">No tasks for this day yet.</p>`;
+      }
+    }, 160);
+  }
+  // List view auto-updates via Yjs update event → renderTodos()
 };
 
 // ─── View Switching ───────────────────────────────────────
@@ -1396,7 +1622,7 @@ window.switchView = function(view) {
   document.getElementById('nav-calendar').classList.toggle('active', view === 'calendar');
   if (view === 'calendar') renderCalendar();
   if (view === 'lists') { renderTodos(); updateProgress(); }
-  if (window.innerWidth <= 640) document.getElementById('sidebar').classList.remove('open');
+  if (window.innerWidth <= 640) closeSidebar();
 };
 
 // ─── Modal System ─────────────────────────────────────────
@@ -1419,7 +1645,17 @@ document.addEventListener('keydown', e => {
 
 // ─── Sidebar toggle (mobile) ──────────────────────────────
 window.toggleSidebar = function() {
-  document.getElementById('sidebar').classList.toggle('open');
+  const sb = document.getElementById('sidebar');
+  if (sb.classList.contains('open')) closeSidebar();
+  else openSidebar();
+};
+window.openSidebar = function() {
+  document.getElementById('sidebar').classList.add('open');
+  document.getElementById('sidebar-backdrop').classList.add('active');
+};
+window.closeSidebar = function() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sidebar-backdrop').classList.remove('active');
 };
 
 // ─── URL-based room joining ───────────────────────────────
@@ -1460,7 +1696,7 @@ function appInit() {
 
   if ('serviceWorker' in navigator) {
     const swCode = `
-      const CACHE = 'tudo-v1';
+      const CACHE = 'liltask-v1';
       self.addEventListener('install', e => e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/']))));
       self.addEventListener('fetch', e => e.respondWith(
         caches.match(e.request).then(r => r || fetch(e.request).then(res => {
