@@ -233,30 +233,44 @@ html, body {
 .header-btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .header-btn.primary:hover { background: var(--accent2); border-color: var(--accent2); }
 
-/* ─── Todo View ─── */
 #todo-view {
   flex: 1;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 24px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .todo-input-wrap {
-  order: 1;
   display: flex;
   gap: 8px;
-  margin-bottom: 24px;
+  margin: 0;
 }
 
 .list-progress {
-  order: 2;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
+
 #todos-container {
-  order: 3;
-  flex: 1;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 16px;
 }
+
+#todo-bottom {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 12px;
+}
+
 #todo-input {
   flex: 1;
   background: var(--bg2);
@@ -400,7 +414,6 @@ html, body {
   display: none;
 }
 #calendar-view.active { display: block; }
-#todo-view.active { display: block; }
 #todo-view:not(.active) { display: none; }
 
 .cal-grid-header {
@@ -695,7 +708,6 @@ html, body {
 
 /* Progress bar for a list */
 .list-progress {
-  order: 2;
   margin-bottom: 20px;
   display: flex;
   align-items: center;
@@ -907,7 +919,6 @@ html, body {
     padding: 16px 16px 0;
   }
   .todo-input-wrap {
-    order: 3;
     margin-bottom: 0;
     padding: 12px 16px;
     padding-bottom: max(12px, env(safe-area-inset-bottom));
@@ -915,7 +926,6 @@ html, body {
     border-top: 1px solid var(--border);
   }
   .list-progress {
-    order: 2;
     margin-bottom: 0;
     padding: 8px 16px;
     background: var(--bg2);
@@ -995,21 +1005,28 @@ html, body {
     </header>
 
     <!-- Todo View -->
-    <div id="todo-view" class="active">
-      <div id="todos-container"></div>
-      <div class="list-progress">
-        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
-        <div class="progress-label" id="progress-label">0 / 0</div>
+
+<div id="todo-view" class="active">
+  <div id="todos-container"></div>
+
+  <div id="todo-bottom">
+    <div class="list-progress">
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
       </div>
-      <div class="todo-input-wrap">
-        <input id="todo-input" placeholder="Add a task…" autocomplete="off" spellcheck="true"/>
-        <button id="sync-btn" onclick="manualSync()" title="Sync now">
+      <div class="progress-label" id="progress-label">0 / 0</div>
+    </div>
+
+    <div class="todo-input-wrap">
+      <input id="todo-input" placeholder="Add a task…" autocomplete="off" spellcheck="true"/>
+      <button id="sync-btn" onclick="manualSync()" title="Sync now">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M13.5 8A5.5 5.5 0 1 1 8 2.5a5.5 5.5 0 0 1 3.9 1.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M11 1v3.5H14.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           Sync
         </button>
         <button id="add-btn" onclick="addTodo()">Add</button>
       </div>
     </div>
+  </div>
 
     <!-- Calendar View -->
     <div id="calendar-view">
