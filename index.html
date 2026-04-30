@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark-violet">
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
@@ -763,6 +763,73 @@ html, body {
 }
 .due-badge.overdue { background: rgba(255,92,124,0.15); color: var(--red); }
 
+/* ─── Themes ─── */
+/* Dark themes */
+[data-theme="dark-violet"] {
+  --bg:#0f0f11;--bg2:#16161a;--bg3:#1e1e24;--bg4:#26262e;
+  --border:#2e2e38;--text:#e8e8f0;--text2:#9090a8;--text3:#5a5a72;
+  --accent:#7c6aff;--accent2:#a855f7;--accent-glow:rgba(124,106,255,0.18);
+  --green:#22d3a0;--red:#ff5c7c;--yellow:#fbbf24;
+}
+[data-theme="dark-slate"] {
+  --bg:#0d1117;--bg2:#161b22;--bg3:#21262d;--bg4:#30363d;
+  --border:#3a3f47;--text:#e6edf3;--text2:#8b949e;--text3:#484f58;
+  --accent:#58a6ff;--accent2:#79c0ff;--accent-glow:rgba(88,166,255,0.15);
+  --green:#3fb950;--red:#f85149;--yellow:#d29922;
+}
+[data-theme="dark-rose"] {
+  --bg:#100c10;--bg2:#1a141a;--bg3:#221c22;--bg4:#2c242c;
+  --border:#3a2c3a;--text:#f0e0f0;--text2:#b090b0;--text3:#705870;
+  --accent:#e05c9a;--accent2:#f07ac0;--accent-glow:rgba(224,92,154,0.18);
+  --green:#4ade80;--red:#fb7185;--yellow:#fbbf24;
+}
+[data-theme="dark-forest"] {
+  --bg:#0a0f0c;--bg2:#111a14;--bg3:#182219;--bg4:#1f2d21;
+  --border:#2a3d2c;--text:#d4e8d4;--text2:#7a9e7a;--text3:#4a6a4a;
+  --accent:#4ade80;--accent2:#86efac;--accent-glow:rgba(74,222,128,0.15);
+  --green:#34d399;--red:#f87171;--yellow:#fbbf24;
+}
+/* Light themes */
+[data-theme="light-clean"] {
+  --bg:#f8f8fc;--bg2:#ffffff;--bg3:#f0f0f8;--bg4:#e4e4ee;
+  --border:#dddde8;--text:#18182a;--text2:#5a5a7a;--text3:#9090b0;
+  --accent:#6655ee;--accent2:#9933ff;--accent-glow:rgba(102,85,238,0.12);
+  --green:#0ea86a;--red:#e53060;--yellow:#d97706;
+}
+[data-theme="light-warm"] {
+  --bg:#fdf8f0;--bg2:#ffffff;--bg3:#f5ede0;--bg4:#ecddc8;
+  --border:#e0d0b8;--text:#2a1a08;--text2:#7a5a38;--text3:#b09070;
+  --accent:#c05a10;--accent2:#e07030;--accent-glow:rgba(192,90,16,0.13);
+  --green:#2a9d5c;--red:#d94040;--yellow:#c57a00;
+}
+[data-theme="light-sky"] {
+  --bg:#f0f6ff;--bg2:#ffffff;--bg3:#e4eeff;--bg4:#d0e0f8;
+  --border:#c0d4f0;--text:#0c1a2e;--text2:#3a6090;--text3:#7aa0c0;
+  --accent:#1a72e8;--accent2:#4090ff;--accent-glow:rgba(26,114,232,0.13);
+  --green:#0ea86a;--red:#e53060;--yellow:#d97706;
+}
+
+/* Mobile calendar dots */
+@media (max-width: 640px) {
+  .cal-todo-preview { display: none; }
+  .cal-dots {
+    display: flex;
+    gap: 3px;
+    flex-wrap: wrap;
+    margin-top: 4px;
+  }
+  .cal-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    flex-shrink: 0;
+  }
+  .cal-dot.done-dot { background: var(--text3); }
+}
+@media (min-width: 641px) {
+  .cal-dots { display: none; }
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -815,9 +882,17 @@ html, body {
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M5 2v2M11 2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 7h12" stroke="currentColor" stroke-width="1.5"/></svg>
         Calendar
       </button>
+      <button class="nav-btn" onclick="openThemesModal()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5C8 2.5 5 5 5 8s3 5.5 3 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 8h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Themes
+      </button>
       <button class="nav-btn" onclick="openPluginsModal()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2h4v3l2 1-1 2-2-1v2l2 1-1 2-2-1v3H6v-3l-2 1-1-2 2-1v-2l-2 1-1-2 2-1V2z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
         Plugins
+      </button>
+      <button class="nav-btn" onclick="openSettingsModal()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Settings
       </button>
     </div>
   </nav>
@@ -870,7 +945,7 @@ html, body {
 // ════════════════════════════════════════════════════════════
 // CONFIG — point WORKER_URL at your deployed Cloudflare Worker
 // ════════════════════════════════════════════════════════════
-const WORKER_URL = 'https://YOUR_WORKER.workers.dev';
+const WORKER_URL = 'https://liltask-sync.abdullahalkafajy.workers.dev/';
 // If no worker deployed, app works offline-only (no sync indicator shown)
 
 // ─── PWA Manifest (injected) ──────────────────────────────
@@ -976,16 +1051,39 @@ function setSyncStatus(state) {
   label.textContent = state === 'synced' ? 'synced' : state === 'syncing' ? 'syncing…' : state === 'error' ? 'error' : 'offline';
 }
 
+// Track the remote state vector we last received per list, so we can send diffs
+const remoteStateVectors = {}; // { listId: Uint8Array }
+
+function getWorkerUrl() {
+  return window._customWorkerUrl || localStorage.getItem('liltask_worker_url') || WORKER_URL;
+}
+
 async function pushUpdate(listId) {
   const list = lists[listId];
-  if (!list || !list.roomId || WORKER_URL.includes('YOUR_WORKER')) return;
+  const workerUrl = getWorkerUrl();
+  if (!list || !list.roomId || workerUrl.includes('YOUR_WORKER')) return;
   const doc = getOrCreateYDoc(listId);
-  const update = Y.encodeStateAsUpdate(doc);
+
+  // Send only the diff the remote hasn't seen yet
+  const remoteStateVec = remoteStateVectors[listId] || null;
+  const update = remoteStateVec
+    ? Y.encodeStateAsUpdate(doc, remoteStateVec)
+    : Y.encodeStateAsUpdate(doc);
+
+  // Nothing new to push
+  if (update.length <= 2) return;
+
   try {
     setSyncStatus('syncing');
-    const r = await fetch(WORKER_URL + '/' + list.roomId, {
+    // Prefix update with 4-byte big-endian length so worker can frame them
+    const framed = new Uint8Array(4 + update.length);
+    const view = new DataView(framed.buffer);
+    view.setUint32(0, update.length, false);
+    framed.set(update, 4);
+
+    const r = await fetch(workerUrl + '/' + list.roomId, {
       method: 'POST',
-      body: update,
+      body: framed,
       headers: { 'Content-Type': 'application/octet-stream' }
     });
     if (r.ok) setSyncStatus('synced');
@@ -995,19 +1093,55 @@ async function pushUpdate(listId) {
 
 async function pullUpdate(listId) {
   const list = lists[listId];
-  if (!list || !list.roomId || WORKER_URL.includes('YOUR_WORKER')) return;
+  const workerUrl = getWorkerUrl();
+  if (!list || !list.roomId || workerUrl.includes('YOUR_WORKER')) return;
   try {
-    const r = await fetch(WORKER_URL + '/' + list.roomId);
+    const r = await fetch(workerUrl + '/' + list.roomId);
     if (r.status === 204) return;
     if (r.ok) {
       const buf = await r.arrayBuffer();
       const doc = getOrCreateYDoc(listId);
-      Y.applyUpdate(doc, new Uint8Array(buf));
+
+      // Parse length-framed updates and apply each one
+      const data = new Uint8Array(buf);
+      const dv = new DataView(buf);
+      let offset = 0;
+      const updates = [];
+
+      while (offset < data.byteLength) {
+        if (offset + 4 > data.byteLength) break; // malformed
+        const len = dv.getUint32(offset, false);
+        offset += 4;
+        if (offset + len > data.byteLength) break; // malformed
+        updates.push(data.slice(offset, offset + len));
+        offset += len;
+      }
+
+      if (updates.length > 0) {
+        // Merge all into one and apply — idempotent for Yjs
+        const merged = Y.mergeUpdates(updates);
+        isPulling = true;
+        Y.applyUpdate(doc, merged);
+        isPulling = false;
+        // Remember the remote state so we only push diffs next time
+        remoteStateVectors[listId] = Y.encodeStateVector(doc);
+      } else if (data.byteLength > 0) {
+        // Legacy blob (no framing) — apply directly as fallback
+        isPulling = true;
+        Y.applyUpdate(doc, data);
+        isPulling = false;
+        remoteStateVectors[listId] = Y.encodeStateVector(doc);
+      }
+
+      setSyncStatus('synced');
     }
-  } catch(e) {}
+  } catch(e) { setSyncStatus('error'); }
 }
 
+let isPulling = false; // guard: don't push during/after pull
+
 function scheduleSync(listId) {
+  if (isPulling) return; // don't echo remote changes back
   clearTimeout(syncTimers[listId]);
   syncTimers[listId] = setTimeout(() => pushUpdate(listId), 800);
 }
@@ -1063,10 +1197,12 @@ document.getElementById('todo-input').addEventListener('keydown', e => {
   if (e.key === 'Enter') addTodo();
 });
 
-function toggleTodo(listId, idx) {
-  // Single source: just update Y.Array — calendar view queries same array
+function toggleTodo(listId, todoId) {
   const todos = getYTodos(listId);
-  const item = todos.get(idx);
+  const arr = todos.toArray();
+  const idx = arr.findIndex(t => t.id === todoId);
+  if (idx === -1) return;
+  const item = arr[idx];
   const doc = getOrCreateYDoc(listId);
   doc.transact(() => {
     todos.delete(idx, 1);
@@ -1075,16 +1211,21 @@ function toggleTodo(listId, idx) {
   checkFinishReward(listId);
 }
 
-function deleteTodo(listId, idx) {
-  // Single source: just delete from Y.Array — calendar view queries same array
+function deleteTodo(listId, todoId) {
   const todos = getYTodos(listId);
+  const arr = todos.toArray();
+  const idx = arr.findIndex(t => t.id === todoId);
+  if (idx === -1) return;
   const doc = getOrCreateYDoc(listId);
   doc.transact(() => { todos.delete(idx, 1); });
 }
 
-function editTodo(listId, idx, newText) {
+function editTodo(listId, todoId, newText) {
   const todos = getYTodos(listId);
-  const item = todos.get(idx);
+  const arr = todos.toArray();
+  const idx = arr.findIndex(t => t.id === todoId);
+  if (idx === -1) return;
+  const item = arr[idx];
   const doc = getOrCreateYDoc(listId);
   doc.transact(() => {
     todos.delete(idx, 1);
@@ -1214,13 +1355,13 @@ function dueBadgeHTML(item) {
 }
 
 function todoHTML(item, idx) {
-  return `<div class="todo-item ${item.done ? 'done' : ''}" data-idx="${idx}" draggable="true">
+  return `<div class="todo-item ${item.done ? 'done' : ''}" data-idx="${idx}" data-id="${item.id}" draggable="true">
     <div class="drag-handle" title="Drag to reorder">⣿</div>
-    <button class="todo-check ${item.done ? 'checked' : ''}" data-idx="${idx}" onclick="toggleTodo('${activeListId}', ${idx})"></button>
-    <div class="todo-text" contenteditable="true" data-idx="${idx}" spellcheck="true">${escHtml(item.text)}</div>
+    <button class="todo-check ${item.done ? 'checked' : ''}" data-id="${item.id}" onclick="toggleTodo('${activeListId}', '${item.id}')"></button>
+    <div class="todo-text" contenteditable="true" data-idx="${idx}" data-id="${item.id}" spellcheck="true">${escHtml(item.text)}</div>
     ${dueBadgeHTML(item)}
     <div class="todo-actions">
-      <button class="todo-act-btn" onclick="deleteTodo('${activeListId}', ${idx})" title="Delete">✕</button>
+      <button class="todo-act-btn" onclick="deleteTodo('${activeListId}', '${item.id}')" title="Delete">✕</button>
     </div>
   </div>`;
 }
@@ -1232,9 +1373,9 @@ function escHtml(str) {
 function attachTodoListeners() {
   document.querySelectorAll('.todo-text').forEach(el => {
     el.addEventListener('blur', () => {
-      const idx = parseInt(el.dataset.idx);
+      const todoId = el.dataset.id;
       const newText = el.textContent.trim();
-      if (newText) editTodo(activeListId, idx, newText);
+      if (newText) editTodo(activeListId, todoId, newText);
       else renderTodos();
     });
     el.addEventListener('keydown', e => {
@@ -1473,10 +1614,16 @@ function calCell(year, month, day, otherMonth, today) {
     `<div class="cal-todo-preview ${t.done ? 'done-prev' : ''}">${escHtml(t.text.substring(0, 18))}${t.text.length > 18 ? '…' : ''}</div>`
   ).join('');
 
+  const dots = allTodos.slice(0, 7).map(t =>
+    `<div class="cal-dot ${t.done ? 'done-dot' : ''}"></div>`
+  ).join('');
+  const dotsHTML = hasTodos ? `<div class="cal-dots">${dots}</div>` : '';
+
   return `<div class="cal-cell ${otherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${hasTodos ? 'has-todos' : ''}"
     onclick="openCalDateModal('${dateKey}')">
     <div class="cal-date">${day}</div>
     ${previews}
+    ${dotsHTML}
   </div>`;
 }
 
@@ -1681,6 +1828,122 @@ function handleRoomFromURL() {
   return true;
 }
 
+// ─── Themes Modal ─────────────────────────────────────────
+const THEMES = [
+  { id:'dark-violet',  label:'Violet Night',  dark:true,  swatch:['#0f0f11','#7c6aff','#a855f7'] },
+  { id:'dark-slate',   label:'GitHub Dark',   dark:true,  swatch:['#0d1117','#58a6ff','#79c0ff'] },
+  { id:'dark-rose',    label:'Rose Dark',     dark:true,  swatch:['#100c10','#e05c9a','#f07ac0'] },
+  { id:'dark-forest',  label:'Forest Dark',   dark:true,  swatch:['#0a0f0c','#4ade80','#86efac'] },
+  { id:'light-clean',  label:'Clean Light',   dark:false, swatch:['#f8f8fc','#6655ee','#9933ff'] },
+  { id:'light-warm',   label:'Warm Parchment',dark:false, swatch:['#fdf8f0','#c05a10','#e07030'] },
+  { id:'light-sky',    label:'Sky Blue',      dark:false, swatch:['#f0f6ff','#1a72e8','#4090ff'] },
+];
+
+let activeTheme = localStorage.getItem('liltask_theme') || 'dark-violet';
+
+function applyTheme(id) {
+  activeTheme = id;
+  document.documentElement.setAttribute('data-theme', id);
+  localStorage.setItem('liltask_theme', id);
+}
+
+applyTheme(activeTheme);
+
+window.openThemesModal = function() {
+  const cards = THEMES.map(t => {
+    const active = t.id === activeTheme;
+    const [bg, a1, a2] = t.swatch;
+    return `<div class="theme-card ${active ? 'theme-active' : ''}" onclick="pickTheme('${t.id}')" id="tcard-${t.id}" style="cursor:pointer">
+      <div class="theme-preview" style="background:${bg};border-radius:8px;height:44px;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:8px;border:1.5px solid ${active ? a1 : 'rgba(128,128,128,0.2)'}">
+        <div style="width:14px;height:14px;border-radius:50%;background:${a1}"></div>
+        <div style="width:10px;height:10px;border-radius:50%;background:${a2}"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:${bg === '#f8f8fc' || bg === '#fdf8f0' || bg === '#f0f6ff' ? '#aaa' : '#fff'}; opacity:0.4"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:13px;font-weight:600;color:var(--text)">${t.label}</span>
+        <span style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-left:auto">${t.dark ? '🌙' : '☀️'}</span>
+        ${active ? '<span style="font-size:10px;font-family:var(--mono);color:var(--accent);margin-left:4px">✓ active</span>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  openModal(`<div class="modal-title">🎨 Themes</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Choose a look. Changes apply instantly.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px">
+      <div style="grid-column:1/-1;font-size:10px;font-family:var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin-bottom:2px">🌙 Dark</div>
+      ${THEMES.filter(t=>t.dark).map(t => {
+        const active = t.id === activeTheme;
+        const [bg,a1,a2] = t.swatch;
+        return `<div onclick="pickTheme('${t.id}')" id="tcard-${t.id}" style="cursor:pointer;padding:10px;border-radius:var(--radius);border:1.5px solid ${active ? 'var(--accent)' : 'var(--border)'};background:${active ? 'var(--accent-glow)' : 'var(--bg3)'};transition:all 0.15s">
+          <div style="background:${bg};border-radius:6px;height:38px;display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:7px">
+            <div style="width:12px;height:12px;border-radius:50%;background:${a1}"></div>
+            <div style="width:9px;height:9px;border-radius:50%;background:${a2}"></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${t.label}</div>
+          ${active ? '<div style="font-size:10px;font-family:var(--mono);color:var(--accent)">✓ active</div>' : ''}
+        </div>`;
+      }).join('')}
+      <div style="grid-column:1/-1;font-size:10px;font-family:var(--mono);letter-spacing:1.2px;text-transform:uppercase;color:var(--text3);margin:6px 0 2px">☀️ Light</div>
+      ${THEMES.filter(t=>!t.dark).map(t => {
+        const active = t.id === activeTheme;
+        const [bg,a1,a2] = t.swatch;
+        return `<div onclick="pickTheme('${t.id}')" id="tcard-${t.id}" style="cursor:pointer;padding:10px;border-radius:var(--radius);border:1.5px solid ${active ? 'var(--accent)' : 'var(--border)'};background:${active ? 'var(--accent-glow)' : 'var(--bg3)'};transition:all 0.15s">
+          <div style="background:${bg};border-radius:6px;height:38px;display:flex;align-items:center;justify-content:center;gap:5px;margin-bottom:7px;border:1px solid rgba(0,0,0,0.08)">
+            <div style="width:12px;height:12px;border-radius:50%;background:${a1}"></div>
+            <div style="width:9px;height:9px;border-radius:50%;background:${a2}"></div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:var(--text)">${t.label}</div>
+          ${active ? '<div style="font-size:10px;font-family:var(--mono);color:var(--accent)">✓ active</div>' : ''}
+        </div>`;
+      }).join('')}
+    </div>
+    <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal()">Done</button></div>`);
+};
+
+window.pickTheme = function(id) {
+  applyTheme(id);
+  openThemesModal(); // re-render to show active state
+};
+
+// ─── Settings Modal ───────────────────────────────────────
+window.openSettingsModal = function() {
+  const currentUrl = localStorage.getItem('liltask_worker_url') || WORKER_URL;
+  openModal(`<div class="modal-title">⚙️ Settings</div>
+    <div style="margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;font-family:var(--mono)">CLOUDFLARE WORKER URL</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5">Set your own deployed worker for sync. Leave the default to run offline-only.</div>
+      <div style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--text3);word-break:break-all;margin-bottom:10px">${escHtml(currentUrl)}</div>
+      <input class="modal-input" id="worker-url-inp" placeholder="https://your-worker.workers.dev" value="${currentUrl.includes('YOUR_WORKER') ? '' : escHtml(currentUrl)}" autocomplete="off" style="margin-bottom:0"/>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="resetWorkerUrl()">Reset Default</button>
+      <button class="modal-btn" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="saveWorkerUrl()">Save</button>
+    </div>`);
+  setTimeout(() => document.getElementById('worker-url-inp')?.focus(), 50);
+};
+
+window.saveWorkerUrl = function() {
+  const inp = document.getElementById('worker-url-inp');
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (val) {
+    localStorage.setItem('liltask_worker_url', val);
+    // Patch WORKER_URL at runtime
+    window._customWorkerUrl = val;
+  }
+  closeModal();
+  setSyncStatus(val && !val.includes('YOUR_WORKER') ? 'synced' : 'offline');
+};
+
+window.resetWorkerUrl = function() {
+  localStorage.removeItem('liltask_worker_url');
+  window._customWorkerUrl = null;
+  closeModal();
+  setSyncStatus('offline');
+};
+
+
 // ─── Init (deferred until Yjs ESM ready) ─────────────────
 function appInit() {
   load();
@@ -1688,7 +1951,8 @@ function appInit() {
   ensureDefaultList();
   renderListsNav();
   switchList(activeListId);
-  setSyncStatus(WORKER_URL.includes('YOUR_WORKER') ? 'offline' : 'synced');
+  const effectiveUrl = window._customWorkerUrl || localStorage.getItem('liltask_worker_url') || WORKER_URL;
+  setSyncStatus(effectiveUrl.includes('YOUR_WORKER') ? 'offline' : 'synced');
 
   setInterval(() => {
     if (activeListId && lists[activeListId]?.roomId) pullUpdate(activeListId);
