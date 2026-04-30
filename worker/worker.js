@@ -132,7 +132,7 @@ export default {
 
       // Store with 30-day TTL
       await env.TODO_KV.put(roomId, merged, {
-        expirationTtl: 60 * 60 * 24 * 30,
+        expirationTtl: 60 * 60 * 24 * 60,
       });
 
       return new Response("OK", { headers: CORS });
