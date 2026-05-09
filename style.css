@@ -727,7 +727,7 @@ padding: 4px;
 
 
 /* ─── Drag to reorder ─── */
-.todo-item { cursor: default; user-select: none; }
+.todo-item { cursor: default; user-select: none; align-items: center; }
 .drag-handle {
     display: flex;
     align-items: center;
