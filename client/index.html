@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#0f0f11"/>
 <meta name="description" content="Collaborative todo lists with real-time sync"/>
 <link rel="stylesheet" href="style.css">
-<link rel="manifest" id="manifest-link"/>
+<link rel="manifest" href="manifest.json"/>
 <title>LilTask — Collaborative Lists</title>
 
 <!-- Custom CRDT (replaces Yjs) -->
@@ -112,5 +112,10 @@
 <!-- Modals rendered by JS -->
 <div id="modal-root"></div>
 <script src="script.js"></script>
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js');
+  }
+</script>
 </body>
 </html>

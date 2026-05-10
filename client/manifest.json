@@ -1,0 +1,32 @@
+{
+  "name": "LilTask – Collaborative Lists",
+  "short_name": "LilTask",
+  "description": "Collaborative todo lists with real-time sync",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0f0f11",
+  "theme_color": "#0f0f11",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "New List",
+      "short_name": "New List",
+      "description": "Create a new task list",
+      "url": "/?action=new-list"
+    }
+  ],
+  "prefer_related_applications": false
+}

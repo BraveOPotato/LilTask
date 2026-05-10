@@ -4,19 +4,6 @@
 const WORKER_URL = 'https://liltask-sync.abdullahalkafajy.workers.dev/';
 // If no worker deployed, app works offline-only (no sync indicator shown)
 
-// ─── PWA Manifest (injected) ──────────────────────────────
-const manifestData = {
-    name: 'LilTask – Collaborative Lists',
-    short_name: 'LilTask',
-    start_url: '/',
-    display: 'standalone',
-    background_color: '#0f0f11',
-    theme_color: '#0f0f11',
-    icons: [{ src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✦</text></svg>", sizes: '192x192', type: 'image/svg+xml' }]
-};
-const manifestBlob = new Blob([JSON.stringify(manifestData)], { type: 'application/json' });
-document.getElementById('manifest-link').href = URL.createObjectURL(manifestBlob);
-
 // ─── State ────────────────────────────────────────────────
 let lists = {}; // { listId: { name, roomId } }
 let activeListId = null;
