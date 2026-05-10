@@ -30,6 +30,7 @@
     <button id="new-list-btn">＋ New list</button>
 
     <div class="sidebar-nav">
+      <div class="sidebar-nav-section">Views</div>
       <button class="nav-btn active" id="nav-lists" onclick="switchView('lists')">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="11.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>
         Lists
@@ -38,13 +39,15 @@
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" stroke-width="1.5" fill="none"/><path d="M5 2v2M11 2v2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2 7h12" stroke="currentColor" stroke-width="1.5"/></svg>
         Calendar
       </button>
-      <button class="nav-btn" onclick="openThemesModal()">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5C8 2.5 5 5 5 8s3 5.5 3 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 8h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-        Themes
-      </button>
+      <div class="sidebar-nav-section">Plugins</div>
       <button class="nav-btn" onclick="openPluginsModal()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2h4v3l2 1-1 2-2-1v2l2 1-1 2-2-1v3H6v-3l-2 1-1-2 2-1v-2l-2 1-1-2 2-1V2z" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linejoin="round"/></svg>
         Plugins
+      </button>
+      <div class="sidebar-nav-section">App</div>
+      <button class="nav-btn" onclick="openThemesModal()">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="5.5" stroke="currentColor" stroke-width="1.5"/><path d="M8 2.5C8 2.5 5 5 5 8s3 5.5 3 5.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M2.5 8h11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        Themes
       </button>
       <button class="nav-btn" onclick="openSettingsModal()">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.5"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.42 1.42M11.53 11.53l1.42 1.42M3.05 12.95l1.42-1.42M11.53 4.47l1.42-1.42" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>

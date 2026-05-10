@@ -9,7 +9,7 @@ let lists = {}; // { listId: { name, roomId } }
 let activeListId = null;
 let currentView = 'lists';
 let calYear, calMonth;
-let plugins = { categoryGroup: false, finishRewards: false };
+let plugins = { categoryGroup: false, finishRewards: true };
 let stores = {}; // { listId: store from createStore() }
 let syncTimers = {};
 
@@ -27,10 +27,10 @@ function save() {
 function load() {
     try {
         lists = JSON.parse(localStorage.getItem('liltask_lists') || '{}');
-        plugins = JSON.parse(localStorage.getItem('liltask_plugins') || '{"categoryGroup":false,"finishRewards":false}');
+        plugins = JSON.parse(localStorage.getItem('liltask_plugins') || '{"categoryGroup":false,"finishRewards":true}');
         activeListId = localStorage.getItem('liltask_active');
     } catch(e) {
-        lists = {}; plugins = { categoryGroup: false, finishRewards: false };
+        lists = {}; plugins = { categoryGroup: false, finishRewards: true };
     }
 }
 
@@ -305,7 +305,7 @@ const CELEBRATE_EMOJIS = ['🎉','🥳','✨','🎊','🏆','💫','🌟','🎆'
 let celebrateTimeout;
 
 function checkFinishReward(listId) {
-    if (!plugins.finishRewards) return;
+    if (!activePlugins().finishRewards) return;
     const arr = getOrCreateStore(listId).getState();
     if (arr.length === 0) return;
     const allDone = arr.every(t => t.done);
@@ -362,7 +362,7 @@ function renderTodos() {
 
     if (global.length > 0) {
         html += `<div class="section-header">📋 Global Todos <span class="sh-count">${global.length}</span></div>`;
-        if (plugins.categoryGroup) {
+        if (activePlugins().categoryGroup) {
             const groups = {};
             global.forEach(item => {
                 const cat = categorize(item.text);
@@ -657,30 +657,79 @@ const PLUGIN_DEFS = [
 }
 ];
 
-window.openPluginsModal = function() {
+// Returns plugin state for a given scope: 'global' or a listId
+function getPlugins(scope) {
+    if (scope === 'global') return plugins;
+    const key = 'liltask_plugins_' + scope;
+    try {
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
+    } catch(e) {}
+    // Inherit from global by default
+    return { ...plugins };
+}
+
+function savePlugins(scope, state) {
+    if (scope === 'global') {
+        plugins = state;
+        save();
+    } else {
+        localStorage.setItem('liltask_plugins_' + scope, JSON.stringify(state));
+    }
+}
+
+// Effective plugin state for active list (list overrides global if set)
+function activePlugins() {
+    if (!activeListId) return plugins;
+    const key = 'liltask_plugins_' + activeListId;
+    const hasOverride = localStorage.getItem(key) !== null;
+    if (hasOverride) return getPlugins(activeListId);
+    return plugins;
+}
+
+let _pluginScope = 'current'; // 'current' | 'all'
+
+window.openPluginsModal = function(scope) {
+    if (scope) _pluginScope = scope;
+    const isAll = _pluginScope === 'all';
+    const effectiveScope = isAll ? 'global' : (activeListId || 'global');
+    const state = getPlugins(effectiveScope);
+
     const cards = PLUGIN_DEFS.map(p => `
-    <div class="plugin-card ${plugins[p.id] ? 'enabled' : ''}" id="pcard-${p.id}">
+    <div class="plugin-card ${state[p.id] ? 'enabled' : ''}" id="pcard-${p.id}">
     <div class="plugin-icon">${p.icon}</div>
     <div class="plugin-info">
     <div class="plugin-name">${p.name}</div>
     <div class="plugin-desc">${p.desc}</div>
     </div>
-    <button class="plugin-toggle ${plugins[p.id] ? 'on' : ''}" id="ptoggle-${p.id}" onclick="togglePlugin('${p.id}')"></button>
+    <button class="plugin-toggle ${state[p.id] ? 'on' : ''}" id="ptoggle-${p.id}" onclick="togglePlugin('${p.id}')"></button>
     </div>`).join('');
 
+    const scopeLabel = isAll
+        ? `All lists`
+        : `<strong style="color:var(--text)">${escHtml(lists[activeListId]?.name || 'Current list')}</strong>`;
+
     openModal(`<div class="modal-title">⚙ Plugins</div>
-    <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Enable or disable plugins anytime. Changes apply instantly.</p>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:12px">Enable or disable plugins anytime. Changes apply instantly.</p>
+    <div style="display:flex;gap:6px;margin-bottom:16px;background:var(--bg3);padding:4px;border-radius:var(--radius)">
+    <button onclick="openPluginsModal('current')" style="flex:1;padding:6px 10px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:600;transition:all 0.15s;background:${!isAll ? 'var(--bg2)' : 'transparent'};color:${!isAll ? 'var(--accent)' : 'var(--text3)'}">This list</button>
+    <button onclick="openPluginsModal('all')" style="flex:1;padding:6px 10px;border-radius:8px;border:none;cursor:pointer;font-family:var(--font);font-size:12px;font-weight:600;transition:all 0.15s;background:${isAll ? 'var(--bg2)' : 'transparent'};color:${isAll ? 'var(--accent)' : 'var(--text3)'}">All lists</button>
+    </div>
+    <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Applying to: ${scopeLabel}${!isAll ? ' <span style="color:var(--text3);font-size:11px">(overrides global defaults for this list)</span>' : ''}</p>
     ${cards}
     <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal()">Done</button></div>`);
 };
 
 window.togglePlugin = function(id) {
-    plugins[id] = !plugins[id];
-    save();
+    const isAll = _pluginScope === 'all';
+    const effectiveScope = isAll ? 'global' : (activeListId || 'global');
+    const state = { ...getPlugins(effectiveScope) };
+    state[id] = !state[id];
+    savePlugins(effectiveScope, state);
     const toggle = document.getElementById('ptoggle-' + id);
     const card = document.getElementById('pcard-' + id);
-    if (toggle) toggle.classList.toggle('on', plugins[id]);
-    if (card) card.classList.toggle('enabled', plugins[id]);
+    if (toggle) toggle.classList.toggle('on', state[id]);
+    if (card) card.classList.toggle('enabled', state[id]);
     renderTodos();
 };
 
@@ -951,7 +1000,7 @@ const THEMES = [
     { id:'dark-violet',  label:'Violet Night',  dark:true,  swatch:['#0f0f11','#7c6aff','#a855f7'] },
 { id:'dark-slate',   label:'GitHub Dark',   dark:true,  swatch:['#0d1117','#58a6ff','#79c0ff'] },
 { id:'dark-rose',    label:'Rose Dark',     dark:true,  swatch:['#100c10','#e05c9a','#f07ac0'] },
-{ id:'dark-forest',  label:'Forest Dark',   dark:true,  swatch:['#0a0f0c','#4ade80','#86efac'] },
+{ id:'dark-forest',  label:'Ember Dark',    dark:true,  swatch:['#0f0b08','#f97316','#fb923c'] },
 { id:'light-clean',  label:'Clean Light',   dark:false, swatch:['#f8f8fc','#6655ee','#9933ff'] },
 { id:'light-warm',   label:'Warm Parchment',dark:false, swatch:['#fdf8f0','#c05a10','#e07030'] },
 { id:'light-sky',    label:'Sky Blue',      dark:false, swatch:['#f0f6ff','#1a72e8','#4090ff'] },
