@@ -38,12 +38,23 @@ function load() {
 function getRoomFromURL() {
     const hash = location.hash.slice(1);
     if (hash && hash.startsWith('room:')) {
-        const rest = hash.slice(5); // roomId:encodedName  OR  roomId (legacy)
+        const rest = hash.slice(5); // roomId:encodedName[:base64plugins]  OR  roomId (legacy)
         const colonIdx = rest.indexOf(':');
         if (colonIdx !== -1) {
-            return { roomId: rest.slice(0, colonIdx), name: decodeURIComponent(rest.slice(colonIdx + 1)) };
+            const roomId = rest.slice(0, colonIdx);
+            const remainder = rest.slice(colonIdx + 1);
+            // Check for plugins segment (second colon)
+            const colonIdx2 = remainder.indexOf(':');
+            if (colonIdx2 !== -1) {
+                const name = decodeURIComponent(remainder.slice(0, colonIdx2));
+                const pluginsB64 = remainder.slice(colonIdx2 + 1);
+                let sharedPlugins = null;
+                try { sharedPlugins = JSON.parse(atob(pluginsB64)); } catch(e) {}
+                return { roomId, name, sharedPlugins };
+            }
+            return { roomId, name: decodeURIComponent(remainder), sharedPlugins: null };
         }
-        return { roomId: rest, name: 'Shared List' };
+        return { roomId: rest, name: 'Shared List', sharedPlugins: null };
     }
     return null;
 }
@@ -710,13 +721,26 @@ window.openShareModal = function() {
     const list = lists[activeListId];
     if (!list) return;
     const encodedName = encodeURIComponent(list.name);
-    const shareUrl = location.origin + location.pathname + '#room:' + list.roomId + ':' + encodedName;
+    const currentPlugins = activePlugins();
+    const pluginsB64 = btoa(JSON.stringify(currentPlugins));
+    const shareUrl = location.origin + location.pathname + '#room:' + list.roomId + ':' + encodedName + ':' + pluginsB64;
+
+    // Build plugin summary for display
+    const enabledPlugins = PLUGIN_DEFS.filter(p => currentPlugins[p.id]);
+    const pluginSummary = enabledPlugins.length
+        ? `<div style="margin:10px 0 0;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text3)">
+            <span style="color:var(--text2);font-weight:600">Plugins included:</span>
+            ${enabledPlugins.map(p => `<span style="margin-left:6px">${p.icon} ${p.name}</span>`).join('')}
+           </div>`
+        : `<div style="margin:10px 0 0;padding:8px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);font-size:12px;color:var(--text3)">No plugins enabled for this list.</div>`;
+
     openModal(`<div class="modal-title">Share list</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:12px">Anyone with this link can collaborate in real time — no sign up needed.</p>
     <div class="share-link-box">
     <span style="flex:1;overflow:hidden;text-overflow:ellipsis">${shareUrl}</span>
-    <button class="share-copy-btn" id="copy-btn" onclick="copyShareLink('${shareUrl}')">Copy</button>
+    <button class="share-copy-btn" id="copy-btn" onclick="copyShareLink('${escHtml(shareUrl)}')">Copy</button>
     </div>
+    ${pluginSummary}
     <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal()">Done</button></div>`);
 };
 
@@ -1061,7 +1085,7 @@ window.closeSidebar = function() {
 function handleRoomFromURL() {
     const parsed = getRoomFromURL();
     if (!parsed) return false;
-    const { roomId, name } = parsed;
+    const { roomId, name, sharedPlugins } = parsed;
 
     // Already have this room — just switch to it
     const existing = Object.entries(lists).find(([, l]) => l.roomId === roomId);
@@ -1070,12 +1094,15 @@ function handleRoomFromURL() {
         return true;
     }
 
-    // New room — create list with the shared name
+    // New room — create list with the shared name and apply shared plugins
     const id = generateId();
     lists[id] = { name, roomId };
     save();
     getOrCreateYDoc(id);
     activeListId = id;
+    if (sharedPlugins && typeof sharedPlugins === 'object') {
+        savePlugins(id, sharedPlugins);
+    }
     save();
     pullUpdate(id);
     return true;
