@@ -109,10 +109,12 @@ function setSyncStatus(state) {
 let isPulling = false; // guard: don't push during/after pull
 
 function getWorkerUrl() {
-    return window._customWorkerUrl || localStorage.getItem('liltask_worker_url') || WORKER_URL;
+    const url = window._customWorkerUrl || localStorage.getItem('liltask_worker_url') || WORKER_URL;
+    return url.replace(/\/+$/, ''); // strip trailing slash
 }
 
 async function pushUpdate(listId) {
+    if (isOfflineMode()) return;
     const list = lists[listId];
     const workerUrl = getWorkerUrl();
     if (!list || !list.roomId || workerUrl.includes('YOUR_WORKER')) return;
@@ -134,6 +136,7 @@ async function pushUpdate(listId) {
 }
 
 async function pullUpdate(listId) {
+    if (isOfflineMode()) return;
     const list = lists[listId];
     const workerUrl = getWorkerUrl();
     if (!list || !list.roomId || workerUrl.includes('YOUR_WORKER')) return;
@@ -1155,22 +1158,57 @@ window.pickTheme = function(id) {
     openThemesModal(); // re-render to show active state
 };
 
+// ─── Offline Mode ─────────────────────────────────────────
+function isOfflineMode() {
+    return localStorage.getItem('liltask_offline_mode') === 'true';
+}
+
+function setOfflineMode(val) {
+    localStorage.setItem('liltask_offline_mode', val ? 'true' : 'false');
+    setSyncStatus(val ? 'offline' : (getWorkerUrl().includes('YOUR_WORKER') ? 'offline' : 'synced'));
+}
+
 // ─── Settings Modal ───────────────────────────────────────
 window.openSettingsModal = function() {
     const currentUrl = localStorage.getItem('liltask_worker_url') || WORKER_URL;
+    const offline = isOfflineMode();
+    const dimStyle = offline
+        ? 'opacity:0.38;pointer-events:none;user-select:none;transition:opacity 0.2s'
+        : 'opacity:1;pointer-events:auto;transition:opacity 0.2s';
+
     openModal(`<div class="modal-title">⚙️ Settings</div>
-    <div style="margin-bottom:16px">
-    <div style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;font-family:var(--mono)">CLOUDFLARE WORKER URL</div>
-    <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5">Set your own deployed worker for sync. Leave the default to run offline-only.</div>
-    <div style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--text3);word-break:break-all;margin-bottom:10px">${escHtml(currentUrl)}</div>
-    <input class="modal-input" id="worker-url-inp" placeholder="https://your-worker.workers.dev" value="${currentUrl.includes('YOUR_WORKER') ? '' : escHtml(currentUrl)}" autocomplete="off" style="margin-bottom:0"/>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);margin-bottom:18px">
+      <div>
+        <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">Offline Mode</div>
+        <div style="font-size:12px;color:var(--text3)">Disable all sync. Data stays local only.</div>
+      </div>
+      <button id="offline-toggle" onclick="toggleOfflineMode()" style="width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;position:relative;flex-shrink:0;background:${offline ? 'var(--accent)' : 'var(--border)'};transition:background 0.2s">
+        <span style="position:absolute;top:3px;left:${offline ? '23px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left 0.2s;display:block"></span>
+      </button>
     </div>
+
+    <div id="worker-url-section" style="${dimStyle}">
+      <div style="font-size:12px;font-weight:700;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;font-family:var(--mono)">CLOUDFLARE WORKER URL</div>
+      <div style="font-size:12px;color:var(--text3);margin-bottom:10px;line-height:1.5">Your deployed D1-backed worker for sync.</div>
+      <div style="background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius);padding:10px 14px;font-family:var(--mono);font-size:11px;color:var(--text3);word-break:break-all;margin-bottom:10px">${escHtml(currentUrl)}</div>
+      <input class="modal-input" id="worker-url-inp" placeholder="https://your-worker.workers.dev" value="${currentUrl.includes('YOUR_WORKER') ? '' : escHtml(currentUrl)}" autocomplete="off" style="margin-bottom:0" ${offline ? 'tabindex="-1"' : ''}/>
+    </div>
+
     <div class="modal-actions">
     <button class="modal-btn" onclick="resetWorkerUrl()">Reset Default</button>
     <button class="modal-btn" onclick="closeModal()">Cancel</button>
     <button class="modal-btn primary" onclick="saveWorkerUrl()">Save</button>
     </div>`);
-    setTimeout(() => document.getElementById('worker-url-inp')?.focus(), 50);
+
+    if (!offline) setTimeout(() => document.getElementById('worker-url-inp')?.focus(), 50);
+};
+
+window.toggleOfflineMode = function() {
+    const next = !isOfflineMode();
+    setOfflineMode(next);
+    // Re-render modal in place with new state
+    openSettingsModal();
 };
 
 window.saveWorkerUrl = function() {
@@ -1179,11 +1217,10 @@ window.saveWorkerUrl = function() {
     const val = inp.value.trim();
     if (val) {
         localStorage.setItem('liltask_worker_url', val);
-        // Patch WORKER_URL at runtime
         window._customWorkerUrl = val;
     }
     closeModal();
-    setSyncStatus(val && !val.includes('YOUR_WORKER') ? 'synced' : 'offline');
+    setSyncStatus(!isOfflineMode() && val && !val.includes('YOUR_WORKER') ? 'synced' : 'offline');
 };
 
 window.resetWorkerUrl = function() {
@@ -1202,7 +1239,7 @@ function appInit() {
     renderListsNav();
     switchList(activeListId);
     const effectiveUrl = window._customWorkerUrl || localStorage.getItem('liltask_worker_url') || WORKER_URL;
-    setSyncStatus(effectiveUrl.includes('YOUR_WORKER') ? 'offline' : 'synced');
+    setSyncStatus(isOfflineMode() || effectiveUrl.includes('YOUR_WORKER') ? 'offline' : 'synced');
 
     setInterval(() => {
         if (activeListId && lists[activeListId]?.roomId) pullUpdate(activeListId);

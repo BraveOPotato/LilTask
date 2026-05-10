@@ -1,19 +1,22 @@
 /**
- * Cloudflare Worker — CRDT Todo Sync
+ * Cloudflare Worker — CRDT Todo Sync (D1 backend)
  * Deploy: wrangler deploy
- * KV namespace: TODO_KV (bind in wrangler.toml)
  *
- * wrangler.toml example:
- * name = "todo-crdt-worker"
- * compatibility_date = "2024-01-01"
- * [[kv_namespaces]]
- * binding = "TODO_KV"
- * id = "YOUR_KV_NAMESPACE_ID"
+ * D1 database: TODO_DB (bind in wrangler.toml)
+ * Schema (run once — see migrations/0001_init.sql):
  *
- * Protocol: updates stored as concatenated length-framed chunks.
- * Each chunk: [4-byte big-endian uint32 length][update bytes]
- * Client reads all chunks, merges with Y.mergeUpdates, applies once.
- * Client sends incremental diffs (not full state), also length-framed.
+ *   CREATE TABLE IF NOT EXISTS room_updates (
+ *     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+ *     room_id    TEXT    NOT NULL,
+ *     update     BLOB    NOT NULL,
+ *     created_at INTEGER NOT NULL DEFAULT (unixepoch())
+ *   );
+ *   CREATE INDEX IF NOT EXISTS idx_room_updates_room_id
+ *     ON room_updates(room_id);
+ *
+ * Protocol: each client update is stored as a separate BLOB row.
+ * GET  /{roomId} — returns all updates as length-framed concatenated blob.
+ * POST /{roomId} — appends one (framed or raw-legacy) update row.
  */
 
 const CORS = {
@@ -22,12 +25,10 @@ const CORS = {
   "Access-Control-Allow-Headers": "Content-Type",
 };
 
-/** Read a 4-byte big-endian uint32 from a DataView at offset */
 function readU32(dv, offset) {
   return dv.getUint32(offset, false);
 }
 
-/** Write a 4-byte big-endian uint32 into a Uint8Array at offset */
 function writeU32(arr, offset, value) {
   arr[offset]     = (value >>> 24) & 0xff;
   arr[offset + 1] = (value >>> 16) & 0xff;
@@ -35,28 +36,6 @@ function writeU32(arr, offset, value) {
   arr[offset + 3] =  value         & 0xff;
 }
 
-/**
- * Parse length-framed buffer into array of Uint8Array updates.
- * Silently drops malformed trailing bytes.
- */
-function parseFramed(buf) {
-  const data = new Uint8Array(buf);
-  const dv   = new DataView(buf);
-  const updates = [];
-  let offset = 0;
-  while (offset + 4 <= data.byteLength) {
-    const len = readU32(dv, offset);
-    offset += 4;
-    if (offset + len > data.byteLength) break; // truncated — drop
-    if (len > 0) updates.push(data.slice(offset, offset + len));
-    offset += len;
-  }
-  return updates;
-}
-
-/**
- * Frame a single update Uint8Array with a 4-byte length prefix.
- */
 function frameOne(update) {
   const framed = new Uint8Array(4 + update.byteLength);
   writeU32(framed, 0, update.byteLength);
@@ -64,14 +43,12 @@ function frameOne(update) {
   return framed;
 }
 
-/**
- * Concatenate two ArrayBuffers.
- */
-function concat(a, b) {
-  const out = new Uint8Array(a.byteLength + b.byteLength);
-  out.set(new Uint8Array(a), 0);
-  out.set(new Uint8Array(b), a.byteLength);
-  return out.buffer;
+function ensureFramed(bytes, buf) {
+  if (buf.byteLength >= 4) {
+    const dv = new DataView(buf);
+    if (readU32(dv, 0) === buf.byteLength - 4) return bytes; // already framed
+  }
+  return frameOne(bytes);
 }
 
 export default {
@@ -81,59 +58,45 @@ export default {
     }
 
     const url    = new URL(request.url);
-    const roomId = url.pathname.slice(1); // /{roomId}
+    const roomId = url.pathname.slice(1);
 
-    if (!roomId || roomId.length < 4) {
+    if (!roomId || roomId.length < 4 || roomId.length > 128 || roomId.includes('/') || roomId.includes('..')) {
       return new Response("Bad room ID", { status: 400, headers: CORS });
     }
 
-    // ── GET — return all stored framed updates ────────────────
+    // ── GET — return all stored updates as one concatenated blob ──────
     if (request.method === "GET") {
-      const data = await env.TODO_KV.get(roomId, "arrayBuffer");
-      if (!data || data.byteLength === 0) {
+      const { results } = await env.TODO_DB.prepare(
+        "SELECT update_data FROM room_updates WHERE room_id = ? ORDER BY id ASC"
+      ).bind(roomId).all();
+
+      if (!results || results.length === 0) {
         return new Response(null, { status: 204, headers: CORS });
       }
-      return new Response(data, {
+
+      const parts    = results.map(r => new Uint8Array(r.update_data));
+      const totalLen = parts.reduce((s, p) => s + p.byteLength, 0);
+      const out      = new Uint8Array(totalLen);
+      let   offset   = 0;
+      for (const p of parts) { out.set(p, offset); offset += p.byteLength; }
+
+      return new Response(out.buffer, {
         headers: { ...CORS, "Content-Type": "application/octet-stream" },
       });
     }
 
-    // ── POST — append new framed update ──────────────────────
+    // ── POST — insert one update row ──────────────────────────────────
     if (request.method === "POST") {
       const incoming = await request.arrayBuffer();
       if (incoming.byteLength === 0) {
         return new Response("Empty body", { status: 400, headers: CORS });
       }
 
-      const incomingBytes = new Uint8Array(incoming);
+      const framed = ensureFramed(new Uint8Array(incoming), incoming);
 
-      // Detect whether the client sent a framed payload (has valid length prefix)
-      // or a legacy raw update (old clients before this fix).
-      let newFramed;
-      if (incoming.byteLength >= 4) {
-        const dv = new DataView(incoming);
-        const claimedLen = readU32(dv, 0);
-        if (claimedLen === incoming.byteLength - 4) {
-          // Already framed by the client — store as-is
-          newFramed = incomingBytes;
-        } else {
-          // Legacy raw update — wrap it in a frame
-          newFramed = frameOne(incomingBytes);
-        }
-      } else {
-        newFramed = frameOne(incomingBytes);
-      }
-
-      // Append to existing stored frames
-      const existing = await env.TODO_KV.get(roomId, "arrayBuffer");
-      const merged = existing
-        ? concat(existing, newFramed.buffer)
-        : newFramed.buffer;
-
-      // Store with 30-day TTL
-      await env.TODO_KV.put(roomId, merged, {
-        expirationTtl: 60 * 60 * 24 * 60,
-      });
+      await env.TODO_DB.prepare(
+        "INSERT INTO room_updates (room_id, update_data) VALUES (?, ?)"
+      ).bind(roomId, framed).run();
 
       return new Response("OK", { headers: CORS });
     }
