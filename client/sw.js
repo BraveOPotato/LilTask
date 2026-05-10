@@ -2,7 +2,7 @@
 // LilTask — Service Worker
 // ════════════════════════════════════════════════════════════
 
-const CACHE_NAME = 'liltask-v1.0.1';
+const CACHE_NAME = 'liltask-v1.1.0';
 const STATIC_ASSETS = [
   '/',
   '/index.html',

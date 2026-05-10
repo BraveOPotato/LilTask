@@ -2,7 +2,7 @@
  * Cloudflare Worker — CRDT Todo Sync (D1 backend)
  * Deploy: wrangler deploy
  *
- * D1 database: TODO_DB (bind in wrangler.toml)
+ * D1 database: liltask_db (bind in wrangler.toml)
  * Schema (run once — see migrations/0001_init.sql):
  *
  *   CREATE TABLE IF NOT EXISTS room_updates (
@@ -66,7 +66,7 @@ export default {
 
     // ── GET — return all stored updates as one concatenated blob ──────
     if (request.method === "GET") {
-      const { results } = await env.TODO_DB.prepare(
+      const { results } = await env.liltask_db.prepare(
         "SELECT update_data FROM room_updates WHERE room_id = ? ORDER BY id ASC"
       ).bind(roomId).all();
 
@@ -94,7 +94,7 @@ export default {
 
       const framed = ensureFramed(new Uint8Array(incoming), incoming);
 
-      await env.TODO_DB.prepare(
+      await env.liltask_db.prepare(
         "INSERT INTO room_updates (room_id, update_data) VALUES (?, ?)"
       ).bind(roomId, framed).run();
 
