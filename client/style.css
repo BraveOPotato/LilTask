@@ -837,7 +837,7 @@ padding: 4px;
     --green:#4ade80;--red:#fb7185;--yellow:#fbbf24;
 }
 [data-theme="dark-forest"] {
-    --bg:#020101;--bg2:#050302;--bg3:#221808;--bg4:#2d2010;
+    --bg:#0f0b08;--bg2:#1a1108;--bg3:#221808;--bg4:#2d2010;
     --border:#3d2e18;--text:#e8dcc8;--text2:#a88a60;--text3:#6a5838;
     --accent:#f97316;--accent2:#fb923c;--accent-glow:rgba(249,115,22,0.18);
     --green:#34d399;--red:#f87171;--yellow:#fbbf24;
