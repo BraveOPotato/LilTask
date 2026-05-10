@@ -255,7 +255,8 @@ function addTodo() {
     const store = getOrCreateStore(activeListId);
     const { encoded } = store.addTodo(text);
     inp.value = '';
-    inp.focus();
+    // Don't re-focus on touch devices — causes keyboard flicker on mobile
+    if (!('ontouchstart' in window)) inp.focus();
 }
 
 document.getElementById('todo-input').addEventListener('keydown', e => {
@@ -277,13 +278,26 @@ function editTodo(listId, todoId, newText) {
 }
 
 function reorderTodo(listId, fromIdx, toIdx) {
-    // LWW store sorts by HLC — reorder not directly supported.
-    // Swap HLC timestamps to influence sort order as best-effort.
     const store = getOrCreateStore(listId);
     const arr = store.getState();
-    if (fromIdx < 0 || toIdx < 0 || fromIdx >= arr.length || toIdx >= arr.length) return;
-    // editTodo with same text triggers new HLC, moving item to end — acceptable UX trade-off
-    store.editTodo(arr[fromIdx].id, arr[fromIdx].text);
+    if (fromIdx < 0 || toIdx < 0 || fromIdx >= arr.length || toIdx >= arr.length || fromIdx === toIdx) return;
+    // Build reordered array
+    const reordered = [...arr];
+    const [moved] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, moved);
+    // Re-insert all items in new order by editing with new HLC timestamps sequentially
+    // We stagger by re-editing each item text to force new HLC order
+    // Actually: store sorts by HLC. We need to set HLCs in ascending order per desired position.
+    // Simplest: call editTodo for each in reverse order with tiny delays — but that's async mess.
+    // Instead: batch-rewrite via store internal if available, else do sequential edits.
+    if (typeof store.reorder === 'function') {
+        store.reorder(reordered.map(t => t.id));
+    } else {
+        // Fallback: edit items in desired order so HLC timestamps ascend correctly
+        reordered.forEach((item, i) => {
+            store.editTodo(item.id, item.text);
+        });
+    }
 }
 
 // ─── Finish Reward ────────────────────────────────────────
@@ -395,7 +409,7 @@ function todoHTML(item, idx) {
     return `<div class="todo-item ${item.done ? 'done' : ''}" data-idx="${idx}" data-id="${item.id}" draggable="true">
     <div class="drag-handle" title="Drag to reorder">⣿</div>
     <button class="todo-check ${item.done ? 'checked' : ''}" data-id="${item.id}" onclick="toggleTodo('${activeListId}', '${item.id}')"></button>
-    <div class="todo-text" contenteditable="true" data-idx="${idx}" data-id="${item.id}" spellcheck="true">${escHtml(item.text)}</div>
+    <div class="todo-text" contenteditable="false" data-idx="${idx}" data-id="${item.id}" spellcheck="true">${escHtml(item.text)}</div>
     ${dueBadgeHTML(item)}
     <div class="todo-actions">
     <button class="todo-act-btn" onclick="deleteTodo('${activeListId}', '${item.id}')" title="Delete">✕</button>
@@ -409,77 +423,147 @@ function escHtml(str) {
 
 function attachTodoListeners() {
     document.querySelectorAll('.todo-text').forEach(el => {
+        el.addEventListener('click', () => {
+            el.contentEditable = 'true';
+            el.focus();
+            const range = document.createRange();
+            const sel = window.getSelection();
+            range.selectNodeContents(el);
+            range.collapse(false);
+            sel.removeAllRanges();
+            sel.addRange(range);
+        });
         el.addEventListener('blur', () => {
+            el.contentEditable = 'false';
             const todoId = el.dataset.id;
             const newText = el.textContent.trim();
             if (newText) editTodo(activeListId, todoId, newText);
             else renderTodos();
         });
-            el.addEventListener('keydown', e => {
-                if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
-            });
+        el.addEventListener('keydown', e => {
+            if (e.key === 'Enter') { e.preventDefault(); el.blur(); }
+            if (e.key === 'Escape') { el.contentEditable = 'false'; renderTodos(); }
+        });
     });
 }
 
 function attachDragListeners() {
     let dragIdx = null;
-    let overIdx = null;
+    let dropIdx = null; // index BEFORE which we drop (0 = before first)
+
+    // Drop-indicator line element
+    let indicator = document.getElementById('drag-indicator');
+    if (!indicator) {
+        indicator = document.createElement('div');
+        indicator.id = 'drag-indicator';
+        document.getElementById('todos-container').appendChild(indicator);
+    }
+
+    function getDropIndex(items, clientY) {
+        for (let i = 0; i < items.length; i++) {
+            const r = items[i].getBoundingClientRect();
+            const mid = r.top + r.height / 2;
+            if (clientY < mid) return i;
+        }
+        return items.length;
+    }
+
+    function showIndicator(items, idx) {
+        const container = document.getElementById('todos-container');
+        const containerRect = container.getBoundingClientRect();
+        if (idx === 0) {
+            const r = items[0].getBoundingClientRect();
+            indicator.style.top = (r.top - containerRect.top + container.scrollTop - 2) + 'px';
+        } else if (idx >= items.length) {
+            const r = items[items.length - 1].getBoundingClientRect();
+            indicator.style.top = (r.bottom - containerRect.top + container.scrollTop + 2) + 'px';
+        } else {
+            const rAbove = items[idx - 1].getBoundingClientRect();
+            const rBelow = items[idx].getBoundingClientRect();
+            indicator.style.top = ((rAbove.bottom + rBelow.top) / 2 - containerRect.top + container.scrollTop) + 'px';
+        }
+        indicator.style.display = 'block';
+    }
+
+    function hideIndicator() {
+        indicator.style.display = 'none';
+    }
 
     document.querySelectorAll('#todos-container .todo-item').forEach(el => {
         const handle = el.querySelector('.drag-handle');
 
-        // Desktop drag via handle
         handle.addEventListener('mousedown', () => { el.draggable = true; });
+
         el.addEventListener('dragstart', e => {
             dragIdx = parseInt(el.dataset.idx);
             el.classList.add('dragging');
             e.dataTransfer.effectAllowed = 'move';
-        });
-        el.addEventListener('dragend', () => {
-            el.classList.remove('dragging');
-            document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
-            if (dragIdx !== null && overIdx !== null && dragIdx !== overIdx) {
-                reorderTodo(activeListId, dragIdx, overIdx);
-            }
-            dragIdx = null; overIdx = null;
-            el.draggable = false;
-        });
-        el.addEventListener('dragover', e => {
-            e.preventDefault();
-            document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
-            overIdx = parseInt(el.dataset.idx);
-            if (overIdx !== dragIdx) el.classList.add('drag-over');
+            // Firefox needs data set
+            e.dataTransfer.setData('text/plain', dragIdx);
         });
 
-            // Touch drag
-            let touchStartY = 0, touchDragIdx = null;
-            handle.addEventListener('touchstart', e => {
-                touchStartY = e.touches[0].clientY;
-                touchDragIdx = parseInt(el.dataset.idx);
-                el.classList.add('dragging');
-            }, { passive: true });
-            handle.addEventListener('touchmove', e => {
-                e.preventDefault();
-                const y = e.touches[0].clientY;
-                const els = [...document.querySelectorAll('#todos-container .todo-item')];
-                document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
-                const target = els.find(item => {
-                    const r = item.getBoundingClientRect();
-                    return y >= r.top && y <= r.bottom;
-                });
-                if (target) {
-                    overIdx = parseInt(target.dataset.idx);
-                    if (overIdx !== touchDragIdx) target.classList.add('drag-over');
+        el.addEventListener('dragend', () => {
+            el.classList.remove('dragging');
+            el.draggable = false;
+            hideIndicator();
+            if (dragIdx !== null && dropIdx !== null) {
+                // Convert "insert before dropIdx" to fromIdx/toIdx swap
+                const actualDrop = dropIdx > dragIdx ? dropIdx - 1 : dropIdx;
+                if (actualDrop !== dragIdx) {
+                    reorderTodo(activeListId, dragIdx, actualDrop);
                 }
-            }, { passive: false });
-            handle.addEventListener('touchend', () => {
-                el.classList.remove('dragging');
-                document.querySelectorAll('.todo-item').forEach(i => i.classList.remove('drag-over'));
-                if (touchDragIdx !== null && overIdx !== null && touchDragIdx !== overIdx) {
-                    reorderTodo(activeListId, touchDragIdx, overIdx);
+            }
+            dragIdx = null; dropIdx = null;
+        });
+    });
+
+    // Container-level dragover for accurate indicator positioning
+    const container = document.getElementById('todos-container');
+    container.addEventListener('dragover', e => {
+        e.preventDefault();
+        const items = [...container.querySelectorAll('.todo-item:not(.dragging)')];
+        if (items.length === 0) return;
+        dropIdx = getDropIndex([...container.querySelectorAll('.todo-item')], e.clientY);
+        showIndicator([...container.querySelectorAll('.todo-item')], dropIdx);
+    });
+
+    container.addEventListener('dragleave', e => {
+        if (!container.contains(e.relatedTarget)) {
+            hideIndicator();
+            dropIdx = null;
+        }
+    });
+
+    // Touch drag
+    document.querySelectorAll('#todos-container .todo-item').forEach(el => {
+        const handle = el.querySelector('.drag-handle');
+        let touchDragIdx = null;
+
+        handle.addEventListener('touchstart', e => {
+            touchDragIdx = parseInt(el.dataset.idx);
+            dragIdx = touchDragIdx;
+            el.classList.add('dragging');
+        }, { passive: true });
+
+        handle.addEventListener('touchmove', e => {
+            e.preventDefault();
+            const y = e.touches[0].clientY;
+            const items = [...document.querySelectorAll('#todos-container .todo-item')];
+            dropIdx = getDropIndex(items, y);
+            showIndicator(items, dropIdx);
+        }, { passive: false });
+
+        handle.addEventListener('touchend', () => {
+            el.classList.remove('dragging');
+            hideIndicator();
+            if (touchDragIdx !== null && dropIdx !== null) {
+                const actualDrop = dropIdx > touchDragIdx ? dropIdx - 1 : dropIdx;
+                if (actualDrop !== touchDragIdx) {
+                    reorderTodo(activeListId, touchDragIdx, actualDrop);
                 }
-                touchDragIdx = null; overIdx = null;
-            });
+            }
+            touchDragIdx = null; dragIdx = null; dropIdx = null;
+        });
     });
 }
 

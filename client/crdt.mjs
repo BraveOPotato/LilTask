@@ -9,6 +9,17 @@ function hlcNow() {
     return `${_lastMs}.${String(_seq).padStart(6, '0')}`;
 }
 
+function generateUUID() {
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+    // Fallback for non-secure contexts (plain HTTP)
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+        const r = Math.random() * 16 | 0;
+        return (c === 'x' ? r : (r & 0x3 | 0x8)).toString(16);
+    });
+}
+
+
+
 const te = new TextEncoder(), td = new TextDecoder();
 
 /** Encode a delta → framed Uint8Array (POST body) */
@@ -67,7 +78,7 @@ export function createStore() {
     function getState()         { return [...state.values()].filter(t => !t.deleted).sort((a,b) => a.hlc < b.hlc ? -1 : 1); }
     function encodeFullState()  { return encodeUpdate({ op: 'snapshot', records: [...state.values()] }); }
 
-    function addTodo(text)      { return mutate({ id: crypto.randomUUID(), text, done: false, deleted: false, hlc: hlcNow() }); }
+    function addTodo(text)      { return mutate({ id: generateUUID(), text, done: false, deleted: false, hlc: hlcNow() }); }
     function toggleTodo(id)     { const e = state.get(id); if (!e || e.deleted) return null; return mutate({ ...e, done: !e.done, hlc: hlcNow() }); }
     function editTodo(id, text) { const e = state.get(id); if (!e || e.deleted) return null; return mutate({ ...e, text, hlc: hlcNow() }); }
     function deleteTodo(id)     { const e = state.get(id); if (!e) return null; return mutate({ ...e, deleted: true, hlc: hlcNow() }); }

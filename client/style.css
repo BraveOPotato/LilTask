@@ -747,9 +747,23 @@ padding: 4px;
     background: var(--bg4);
     border-color: var(--accent);
 }
-.todo-item.drag-over {
-    border-top: 2px solid var(--accent);
+.todo-text[contenteditable="true"] { cursor: text; }
+.todo-text[contenteditable="false"] { cursor: default; user-select: none; }
+
+/* Drop indicator line */
+#drag-indicator {
+    display: none;
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 99px;
+    pointer-events: none;
+    box-shadow: 0 0 6px var(--accent);
+    z-index: 10;
 }
+#todos-container { position: relative; }
 
 /* ─── Section headers ─── */
 .section-header {

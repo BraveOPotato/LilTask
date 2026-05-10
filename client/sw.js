@@ -35,6 +35,12 @@ self.addEventListener('activate', (e) => {
 // Static assets  → cache-first
 // Cloudflare Worker sync calls → network-only (never cache)
 // Everything else → network-first, fallback to cache
+
+function isCacheable(request) {
+  const url = new URL(request.url);
+  return url.protocol === 'http:' || url.protocol === 'https:';
+}
+
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
 
@@ -45,6 +51,9 @@ self.addEventListener('fetch', (e) => {
   ) {
     return; // let browser handle normally
   }
+
+  // Skip non-cacheable schemes (chrome-extension://, etc.)
+  if (!isCacheable(e.request)) return;
 
   // Cache-first: own static assets
   if (STATIC_ASSETS.includes(url.pathname) || url.pathname === '/') {
