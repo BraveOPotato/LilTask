@@ -172,9 +172,13 @@ function createList(name, roomId = null) {
 
 function ensureDefaultList() {
     if (Object.keys(lists).length === 0) {
-        const id = createList('My List');
+        // First ever load — show new list modal after app renders
+        setTimeout(() => openNewListModal(), 80);
+        // Placeholder so renderListsNav/switchList don't crash
+        const id = createList('__placeholder__');
         activeListId = id;
         save();
+        return;
     }
     if (!activeListId || !lists[activeListId]) {
         activeListId = Object.keys(lists)[0];
@@ -185,7 +189,7 @@ function ensureDefaultList() {
 function switchList(id) {
     activeListId = id;
     save();
-    document.getElementById('header-title').textContent = lists[id]?.name || 'List';
+    document.getElementById('header-title').textContent = lists[id]?.name === '__placeholder__' ? '' : (lists[id]?.name || 'List');
     renderListsNav();
     renderTodos();
     updateProgress();
@@ -209,7 +213,8 @@ function touchListTTL(listId) {
 }
 
 window.deleteList = function(listId) {
-    if (Object.keys(lists).length <= 1) {
+    const realListCount = Object.values(lists).filter(l => l.name !== '__placeholder__').length;
+    if (realListCount <= 1) {
         openModal(`<div class="modal-title">Can't delete</div>
         <p style="color:var(--text3);font-size:14px;margin-bottom:16px">You need at least one list.</p>
         <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal()">OK</button></div>`);
@@ -580,7 +585,7 @@ function updateProgress() {
 // ─── Lists Nav ────────────────────────────────────────────
 function renderListsNav() {
     const nav = document.getElementById('lists-nav');
-    nav.innerHTML = Object.entries(lists).map(([id, list]) => {
+    nav.innerHTML = Object.entries(lists).filter(([, l]) => l.name !== '__placeholder__').map(([id, list]) => {
         const count = getOrCreateStore(id).getState().length;
         const active = id === activeListId ? 'active' : '';
         return `<div class="list-item ${active}" onclick="switchList('${id}')">
@@ -593,23 +598,101 @@ function renderListsNav() {
 }
 
 // ─── New List Modal ───────────────────────────────────────
-document.getElementById('new-list-btn').onclick = () => {
+const LIST_TEMPLATES = [
+    {
+        id: 'grocery',
+        icon: '🛒',
+        name: 'Grocery List',
+        desc: 'Smart category grouping for your shopping trips.',
+        plugins: { categoryGroup: true, finishRewards: true },
+        defaultName: 'Grocery List'
+    },
+    {
+        id: 'personal',
+        icon: '✅',
+        name: 'Personal Todos',
+        desc: 'Track personal tasks with a celebratory finish.',
+        plugins: { categoryGroup: false, finishRewards: true },
+        defaultName: 'Personal Todos'
+    },
+    {
+        id: 'blank',
+        icon: '📋',
+        name: 'Blank List',
+        desc: 'Start fresh with no plugins enabled.',
+        plugins: { categoryGroup: false, finishRewards: false },
+        defaultName: ''
+    }
+];
+
+let _selectedTemplate = null;
+
+function openNewListModal() {
+    _selectedTemplate = null;
+    const templateCards = LIST_TEMPLATES.map(t => `
+    <div class="nl-template-card" id="nlt-${t.id}" onclick="selectTemplate('${t.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:var(--radius);border:1.5px solid var(--border);background:var(--bg3);cursor:pointer;transition:all 0.15s;margin-bottom:8px">
+        <div style="font-size:24px;line-height:1">${t.icon}</div>
+        <div style="flex:1">
+            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:2px">${t.name}</div>
+            <div style="font-size:11px;color:var(--text3)">${t.desc}</div>
+        </div>
+        <div class="nlt-check" id="nltcheck-${t.id}" style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--border);flex-shrink:0;transition:all 0.15s"></div>
+    </div>`).join('');
+
     openModal(`<div class="modal-title">New list</div>
-    <input class="modal-input" id="nl-name" placeholder="List name…" autocomplete="off"/>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:14px">Choose a template to get started.</p>
+    ${templateCards}
+    <input class="modal-input" id="nl-name" placeholder="List name…" autocomplete="off" style="margin-top:4px"/>
     <div class="modal-actions">
     <button class="modal-btn" onclick="closeModal()">Cancel</button>
-    <button class="modal-btn primary" onclick="createAndSwitch()">Create</button>
+    <button class="modal-btn primary" id="nl-create-btn" onclick="createAndSwitch()">Create</button>
     </div>`);
     setTimeout(() => document.getElementById('nl-name')?.focus(), 50);
     document.getElementById('nl-name').addEventListener('keydown', e => {
         if (e.key === 'Enter') createAndSwitch();
     });
+}
+
+document.getElementById('new-list-btn').onclick = openNewListModal;
+
+window.selectTemplate = function(id) {
+    _selectedTemplate = LIST_TEMPLATES.find(t => t.id === id) || null;
+    // Update card styles
+    LIST_TEMPLATES.forEach(t => {
+        const card = document.getElementById('nlt-' + t.id);
+        const check = document.getElementById('nltcheck-' + t.id);
+        if (!card) return;
+        const active = t.id === id;
+        card.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+        card.style.background = active ? 'var(--accent-glow)' : 'var(--bg3)';
+        check.style.background = active ? 'var(--accent)' : 'transparent';
+        check.style.borderColor = active ? 'var(--accent)' : 'var(--border)';
+        check.innerHTML = active ? '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>' : '';
+    });
+    // Pre-fill name if empty
+    const nameInp = document.getElementById('nl-name');
+    if (nameInp && !nameInp.value.trim() && _selectedTemplate?.defaultName) {
+        nameInp.value = _selectedTemplate.defaultName;
+    }
 };
 
 window.createAndSwitch = function() {
-    const name = document.getElementById('nl-name')?.value.trim();
+    const nameInp = document.getElementById('nl-name');
+    const name = nameInp?.value.trim() || (_selectedTemplate?.defaultName) || 'Untitled';
     if (!name) return;
+    // Remove placeholder list if it exists
+    const placeholderEntry = Object.entries(lists).find(([, l]) => l.name === '__placeholder__');
+    if (placeholderEntry) {
+        const [pid] = placeholderEntry;
+        delete lists[pid];
+        localStorage.removeItem('liltask_ydoc_' + pid);
+        delete stores[pid];
+    }
     const id = createList(name);
+    // Apply template plugins to this list
+    if (_selectedTemplate) {
+        savePlugins(id, { ..._selectedTemplate.plugins });
+    }
     activeListId = id;
     save();
     closeModal();
