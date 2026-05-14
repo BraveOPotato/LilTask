@@ -207,6 +207,7 @@ function switchList(id) {
     renderListsNav();
     renderTodos();
     updateProgress();
+    if (currentView === 'calendar') renderCalendar();
     pullUpdate(id);
     touchListTTL(id);
     if (window.innerWidth <= 640) closeSidebar();
@@ -1298,31 +1299,37 @@ window.resetWorkerUrl = function() {
 // ══════════════════════════════════════════════════════════
 
 // ─── Recurring Storage Helpers ────────────────────────────
-function loadRecurring() {
-    try { return JSON.parse(localStorage.getItem('liltask_recurring') || '[]'); }
+function loadRecurring(listId) {
+    const id = listId || activeListId;
+    try { return JSON.parse(localStorage.getItem('liltask_recurring_' + id) || '[]'); }
     catch(e) { return []; }
 }
 
-function saveRecurring(arr) {
-    localStorage.setItem('liltask_recurring', JSON.stringify(arr));
+function saveRecurring(arr, listId) {
+    const id = listId || activeListId;
+    localStorage.setItem('liltask_recurring_' + id, JSON.stringify(arr));
 }
 
-function loadRecurringCompletions() {
-    try { return JSON.parse(localStorage.getItem('liltask_rec_completions') || '{}'); }
+function loadRecurringCompletions(listId) {
+    const id = listId || activeListId;
+    try { return JSON.parse(localStorage.getItem('liltask_rec_completions_' + id) || '{}'); }
     catch(e) { return {}; }
 }
 
-function saveRecurringCompletions(obj) {
-    localStorage.setItem('liltask_rec_completions', JSON.stringify(obj));
+function saveRecurringCompletions(obj, listId) {
+    const id = listId || activeListId;
+    localStorage.setItem('liltask_rec_completions_' + id, JSON.stringify(obj));
 }
 
-function loadRecurringDeletions() {
-    try { return JSON.parse(localStorage.getItem('liltask_rec_deletions') || '{}'); }
+function loadRecurringDeletions(listId) {
+    const id = listId || activeListId;
+    try { return JSON.parse(localStorage.getItem('liltask_rec_deletions_' + id) || '{}'); }
     catch(e) { return {}; }
 }
 
-function saveRecurringDeletions(obj) {
-    localStorage.setItem('liltask_rec_deletions', JSON.stringify(obj));
+function saveRecurringDeletions(obj, listId) {
+    const id = listId || activeListId;
+    localStorage.setItem('liltask_rec_deletions_' + id, JSON.stringify(obj));
 }
 
 // ─── Date Key Helpers ─────────────────────────────────────
