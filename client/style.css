@@ -985,7 +985,6 @@ flex-shrink: 0;
 .rec-monthly { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
 
 /* ─── Recurring section in list view ─── */
-.rec-section-header { margin-top: 8px; }
 
 .rec-group-header {
     display: flex;
@@ -1019,6 +1018,8 @@ flex-shrink: 0;
 
 /* ─── Recurring type badge in todos ─── */
 .rec-badge { margin-left: 4px; }
+
+.rec-type-badge { padding: 0 0.8rem; border-radius: 2rem; }
 
 /* ─── Manage modal rows ─── */
 .rec-manage-row {

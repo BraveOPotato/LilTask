@@ -1542,7 +1542,7 @@ renderTodos = function() {
     const anyRec = daily.length + weekly.length + monthly.length > 0;
 
     if (anyRec) {
-        html += `<div class="section-header rec-section-header">🔁 Recurring <span class="sh-count">${daily.length + weekly.length + monthly.length}</span></div>`;
+        html += `<div class="section-header">🔁 Recurring <span class="sh-count">${daily.length + weekly.length + monthly.length}</span></div>`;
 
         const renderRecGroup = (label, recs, type) => {
             if (!recs.length) return '';
@@ -1580,15 +1580,10 @@ renderTodos = function() {
                     checkEl = `<button class="todo-check ${done ? 'checked' : ''}" onclick="toggleRecurring('${rec.id}', '${pk}')"></button>`;
                 }
 
-                // Early-completion label suffix
-                const earlyTag = isEarly ? `<span class="rec-early-tag" title="Early completion allowed">⚡ early</span>` : '';
-
                 out += `<div class="todo-item rec-todo-item ${done ? 'done' : ''}" data-recid="${rec.id}">
                     <div class="drag-handle" style="opacity:0.2;pointer-events:none">⣿</div>
                     ${checkEl}
                     <div class="todo-text" style="flex:1">${escHtml(rec.text)}</div>
-                    ${earlyTag}
-                    <span class="rec-badge rec-${type}">${type}</span>
                     <div class="todo-actions">
                         <button class="todo-act-btn" onclick="deleteRecurringFromList('${rec.id}')">✕</button>
                     </div>
