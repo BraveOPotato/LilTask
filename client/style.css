@@ -401,7 +401,7 @@ transition: background 0.15s;
 #calendar-view {
 flex: 1;
 overflow-y: auto;
-padding: 24px;
+padding: 16px 24px;
 display: none;
 }
 #calendar-view.active { display: block; }
@@ -442,14 +442,14 @@ display: none;
 .cal-cell.other-month { opacity: 0.35; }
 .cal-cell.today { border-color: var(--accent); }
 .cal-cell.today .cal-date { color: var(--accent); font-weight: 800; }
-.cal-cell.has-todos::before {
+/*.cal-cell.has-todos::before {
     content: '';
     position: absolute;
     bottom: 6px; right: 6px;
     width: 6px; height: 6px;
     border-radius: 50%;
     background: var(--accent);
-}
+}*/
 .cal-date {
     font-family: var(--mono);
     font-size: 13px;
@@ -1123,7 +1123,7 @@ flex-shrink: 0;
 #cal-recurring-btn-wrap {
     display: flex;
     justify-content: center;
-    padding: 8px 16px 2px;
+    padding: 0px 0px 20px;
 }
 .rec-cal-btn {
     display: flex !important;

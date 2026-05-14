@@ -2074,7 +2074,7 @@ renderCalendar = function() {
     }
     grid.innerHTML = cells;
 
-    // Inject "Recurring Tasks" button below cal nav
+    // Inject "Recurring Tasks" button above cal nav
     let recBtn = document.getElementById('cal-recurring-btn');
     if (!recBtn) {
         recBtn = document.createElement('div');
@@ -2082,7 +2082,7 @@ renderCalendar = function() {
         recBtn.innerHTML = `<button id="cal-recurring-btn" class="modal-btn rec-cal-btn" onclick="openRecurringModal()">🔁 Recurring Tasks</button>`;
         const calView = document.getElementById('calendar-view');
         const calNav = calView.querySelector('.cal-nav');
-        calNav.after(recBtn);
+        calNav.before(recBtn);
     }
 };
 
