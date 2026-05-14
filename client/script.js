@@ -1051,11 +1051,46 @@ window.switchView = function(view) {
 // ─── Modal System ─────────────────────────────────────────
 window.openModal = function(html) {
     const root = document.getElementById('modal-root');
-    root.innerHTML = `<div class="modal-overlay" onclick="overlayClose(event)"><div class="modal">${html}</div></div>`;
+    const existing = root.querySelector('.modal');
+    if (existing) {
+        // Overlay already open — morph content smoothly
+        morphModal(html);
+        return;
+    }
+    root.innerHTML = `<div class="modal-overlay" onclick="overlayClose(event)"><div class="modal modal-enter">${html}</div></div>`;
+    requestAnimationFrame(() => {
+        const m = root.querySelector('.modal');
+        if (m) { m.classList.remove('modal-enter'); m.classList.add('modal-entered'); }
+    });
 };
 
+// Swap modal content with slide animation (no overlay flicker)
+function morphModal(html, direction) {
+    const modal = document.querySelector('#modal-root .modal');
+    if (!modal) { window.openModal(html); return; }
+    const dir = direction === 'back' ? -1 : 1;
+    const outClass = dir > 0 ? 'modal-slide-out-left' : 'modal-slide-out-right';
+    const inClass  = dir > 0 ? 'modal-slide-in-right' : 'modal-slide-in-left';
+    modal.classList.add(outClass);
+    setTimeout(() => {
+        modal.innerHTML = html;
+        modal.classList.remove(outClass);
+        modal.classList.add(inClass);
+        requestAnimationFrame(() => {
+            modal.classList.remove(inClass);
+        });
+    }, 160);
+}
+window.morphModal = morphModal;
+
 window.closeModal = function() {
-    document.getElementById('modal-root').innerHTML = '';
+    const modal = document.querySelector('#modal-root .modal');
+    if (modal) {
+        modal.classList.add('modal-leave');
+        setTimeout(() => { document.getElementById('modal-root').innerHTML = ''; }, 180);
+    } else {
+        document.getElementById('modal-root').innerHTML = '';
+    }
 };
 
 window.overlayClose = function(e) {
@@ -1332,9 +1367,14 @@ function getRecurringPeriodKey(rec, date) {
 // Is this recurring task due on the given date?
 function isRecurringDueOn(rec, date) {
     const d = date instanceof Date ? date : new Date(date + 'T12:00:00');
+    // Never show before creation date
+    if (rec.created) {
+        const dk = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+        if (dk < rec.created) return false;
+    }
     if (rec.type === 'daily') return true;
     if (rec.type === 'weekly') {
-        const dow = d.getDay(); // 0=Sun
+        const dow = d.getDay();
         return rec.days && rec.days.includes(dow);
     }
     if (rec.type === 'monthly') {
@@ -1418,12 +1458,15 @@ function setRecurringDone(recId, periodKey, val) {
 
 // Should this task be visible today? (early-completion: always show whole week/month)
 function isRecurringVisibleToday(rec) {
+    const today = new Date();
+    const tk = todayKey();
+    // Never before creation
+    if (rec.created && tk < rec.created) return false;
     if (!rec.earlyCompletion) {
-        // Standard: only show on due days
-        return isRecurringDueOn(rec, new Date());
+        return isRecurringDueOn(rec, today);
     }
-    // Early completion: show all week long (weekly) or all month (monthly)
-    return true; // daily is always visible
+    // Early completion: show all week (weekly) or all month (monthly) from creation onward
+    return true;
 }
 
 // ─── Get active recurring tasks for TODAY (list view) ────
@@ -1666,9 +1709,9 @@ window.openDeleteRecurringManage = function(recId) {
 // ─── New Recurring Flow ───────────────────────────────────
 let _newRec = {}; // temp state for wizard
 
-window.openNewRecurringFlow = function() {
+window.openNewRecurringFlow = function(dir) {
     _newRec = {};
-    openModal(`<div class="modal-title">New recurring task</div>
+    morphModal(`<div class="modal-title">New recurring task</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:18px">How often should this repeat?</p>
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
         <button class="modal-btn rec-freq-btn" onclick="selectRecurringFreq('daily')">
@@ -1693,7 +1736,7 @@ window.openNewRecurringFlow = function() {
             </div>
         </button>
     </div>
-    <div class="modal-actions"><button class="modal-btn" onclick="openRecurringModal()">Back</button></div>`);
+    <div class="modal-actions"><button class="modal-btn" onclick="openRecurringModal('back')">Back</button></div>`, dir || 'back');
 };
 
 window.selectRecurringFreq = function(type) {
@@ -1707,7 +1750,7 @@ window.selectRecurringFreq = function(type) {
     }
 };
 
-window.openRecurringWeekdayPicker = function() {
+window.openRecurringWeekdayPicker = function(dir) {
     const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
     _newRec.days = _newRec.days || [];
     const btns = dayNames.map((d, i) => {
@@ -1715,13 +1758,13 @@ window.openRecurringWeekdayPicker = function() {
         return `<button class="rec-day-btn ${sel ? 'selected' : ''}" id="rdayBtn${i}" onclick="toggleRecurringDay(${i})">${d}</button>`;
     }).join('');
 
-    openModal(`<div class="modal-title">Pick days of the week</div>
+    morphModal(`<div class="modal-title">Pick days of the week</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Task will be due on selected days each week.</p>
     <div class="rec-day-grid">${btns}</div>
     <div class="modal-actions">
-        <button class="modal-btn" onclick="openNewRecurringFlow()">Back</button>
+        <button class="modal-btn" onclick="openNewRecurringFlow('back')">Back</button>
         <button class="modal-btn primary" onclick="confirmRecurringWeekdays()">Next →</button>
-    </div>`);
+    </div>`, dir || 'forward');
 };
 
 window.toggleRecurringDay = function(i) {
@@ -1740,7 +1783,7 @@ window.confirmRecurringWeekdays = function() {
     openRecurringEarlyCompletionStep();
 };
 
-window.openRecurringMonthDatePicker = function() {
+window.openRecurringMonthDatePicker = function(dir) {
     _newRec.dates = _newRec.dates || [];
     const today = new Date();
     const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
@@ -1749,13 +1792,13 @@ window.openRecurringMonthDatePicker = function() {
         const sel = _newRec.dates.includes(d);
         cells += `<button class="rec-cal-date-btn ${sel ? 'selected' : ''}" id="rcalBtn${d}" onclick="toggleRecurringDate(${d})">${d}</button>`;
     }
-    openModal(`<div class="modal-title">Pick dates each month</div>
+    morphModal(`<div class="modal-title">Pick dates each month</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:14px">Task will be due on these dates every month.</p>
     <div class="rec-cal-date-grid">${cells}</div>
     <div class="modal-actions">
-        <button class="modal-btn" onclick="openNewRecurringFlow()">Back</button>
+        <button class="modal-btn" onclick="openNewRecurringFlow('back')">Back</button>
         <button class="modal-btn primary" onclick="confirmRecurringDates()">Next →</button>
-    </div>`);
+    </div>`, dir || 'forward');
 };
 
 window.toggleRecurringDate = function(d) {
@@ -1774,7 +1817,7 @@ window.confirmRecurringDates = function() {
     openRecurringEarlyCompletionStep();
 };
 
-window.openRecurringEarlyCompletionStep = function() {
+window.openRecurringEarlyCompletionStep = function(dir) {
     const isWeekly = _newRec.type === 'weekly';
     const count = isWeekly ? (_newRec.days || []).length : (_newRec.dates || []).length;
     const periodLabel = isWeekly ? 'week' : 'month';
@@ -1784,7 +1827,7 @@ window.openRecurringEarlyCompletionStep = function() {
 
     const earlyOn = !!_newRec.earlyCompletion;
 
-    openModal(`<div class="modal-title">Early completion</div>
+    morphModal(`<div class="modal-title">Early completion</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:16px">${desc}</p>
 
     <div style="padding:14px 16px;background:var(--bg3);border:1.5px solid ${earlyOn ? 'var(--accent)' : 'var(--border)'};border-radius:var(--radius);margin-bottom:16px;transition:border-color 0.2s" id="early-card">
@@ -1806,36 +1849,57 @@ window.openRecurringEarlyCompletionStep = function() {
     </div>
 
     <div class="modal-actions">
-        <button class="modal-btn" onclick="${_newRec.type === 'weekly' ? 'openRecurringWeekdayPicker()' : 'openRecurringMonthDatePicker()'}">Back</button>
+        <button class="modal-btn" onclick="${_newRec.type === 'weekly' ? 'openRecurringWeekdayPicker(\'back\')' : 'openRecurringMonthDatePicker(\'back\')'}">Back</button>
         <button class="modal-btn primary" onclick="openRecurringTaskInput()">Next →</button>
-    </div>`);
+    </div>`, dir || 'forward');
 };
 
 window.toggleEarlyCompletion = function() {
     _newRec.earlyCompletion = !_newRec.earlyCompletion;
-    // Re-render this step in-place
-    openRecurringEarlyCompletionStep();
+    // Just swap the card content in-place, no slide
+    const earlyOn = !!_newRec.earlyCompletion;
+    const isWeekly = _newRec.type === 'weekly';
+    const count = isWeekly ? (_newRec.days || []).length : (_newRec.dates || []).length;
+    const periodLabel = isWeekly ? 'week' : 'month';
+    const card = document.getElementById('early-card');
+    if (card) {
+        card.style.borderColor = earlyOn ? 'var(--accent)' : 'var(--border)';
+        const toggle = document.getElementById('early-toggle');
+        const thumb = document.getElementById('early-thumb');
+        if (toggle) toggle.style.background = earlyOn ? 'var(--accent)' : 'var(--border)';
+        if (thumb) thumb.style.left = earlyOn ? '23px' : '3px';
+        // Update hint text
+        const hint = card.querySelector('div:last-child');
+        if (hint) {
+            if (earlyOn) {
+                hint.style.cssText = 'font-size:11px;color:var(--accent);font-family:var(--mono);padding:6px 8px;background:var(--accent-glow);border-radius:6px;margin-top:2px';
+                hint.innerHTML = `Progress tracked as <strong>${count > 1 ? '0/'+count : '0/1'}</strong> — tap to count each completion this ${periodLabel}`;
+            } else {
+                hint.style.cssText = 'font-size:11px;color:var(--text3);padding:6px 8px;background:var(--bg4);border-radius:6px;margin-top:2px';
+                hint.innerHTML = `Task only visible on its scheduled day${count !== 1 ? 's' : ''}`;
+            }
+        }
+    }
 };
 
-window.openRecurringTaskInput = function() {
+window.openRecurringTaskInput = function(dir) {
     const typeLabel = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
-    const backFn = _newRec.type === 'daily' ? 'openNewRecurringFlow()' :
-                   _newRec.type === 'weekly' ? 'openRecurringEarlyCompletionStep()' :
-                   'openRecurringEarlyCompletionStep()';
-    openModal(`<div class="modal-title">Name your task</div>
+    const backFn = _newRec.type === 'daily' ? "openNewRecurringFlow('back')" :
+                   "openRecurringEarlyCompletionStep('back')";
+    morphModal(`<div class="modal-title">Name your task</div>
     <p style="color:var(--text3);font-size:13px;margin-bottom:12px">This will repeat <strong style="color:var(--accent)">${typeLabel[_newRec.type]}</strong>${_newRec.earlyCompletion ? ' <span style="color:var(--green);font-size:11px">⚡ early completion on</span>' : ''}.</p>
     <input class="modal-input" id="rec-task-inp" placeholder="e.g. Morning workout…" autocomplete="off"/>
     <div class="modal-actions">
         <button class="modal-btn" onclick="${backFn}">Back</button>
         <button class="modal-btn primary" onclick="saveNewRecurringTask()">Create</button>
-    </div>`);
+    </div>`, dir || 'forward');
     setTimeout(() => {
         const inp = document.getElementById('rec-task-inp');
         if (inp) {
             inp.focus();
             inp.addEventListener('keydown', e => { if (e.key === 'Enter') saveNewRecurringTask(); });
         }
-    }, 50);
+    }, 200);
 };
 
 window.saveNewRecurringTask = function() {
