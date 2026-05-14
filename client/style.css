@@ -457,6 +457,7 @@ display: none;
     color: var(--text2);
     margin-bottom: 4px;
 }
+/*
 .cal-todo-preview {
     font-size: 10px;
     color: var(--text3);
@@ -466,12 +467,16 @@ display: none;
     margin-bottom: 2px;
 }
 .cal-todo-preview.done-prev { text-decoration: line-through; }
+*/
+
+.cal-todo-preview { display: none; }
 
 .cal-nav {
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
     margin-bottom: 16px;
+    gap: clamp(1rem, 2px , 2rem);
 }
 .cal-nav-btn {
     background: var(--bg2);
@@ -489,6 +494,7 @@ display: none;
     font-size: 18px;
     font-weight: 700;
     letter-spacing: -0.3px;
+    text-align: center;
 }
 
 /* ─── Modals ─── */
@@ -879,8 +885,25 @@ padding: 4px;
     }
     .cal-dot.done-dot { background: var(--text3); }
 }
+
 @media (min-width: 641px) {
-    .cal-dots { display: none; }
+  .cal-todo-preview { display: none; }
+
+  .cal-dots {
+      display: flex;
+      gap: 3px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+  }
+
+  .cal-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      flex-shrink: 0;
+  }
+
+  .cal-dot.done-dot { background: var(--text3); }
 }
 
 /* Scrollbar */

@@ -614,20 +614,20 @@ function renderListsNav() {
 // ─── New List Modal ───────────────────────────────────────
 const LIST_TEMPLATES = [
     {
-        id: 'grocery',
-        icon: '🛒',
-        name: 'Grocery List',
-        desc: 'Smart category grouping for your shopping trips.',
-        plugins: { categoryGroup: true, finishRewards: true },
-        defaultName: 'Grocery List'
-    },
-    {
         id: 'personal',
         icon: '✅',
         name: 'Personal Todos',
         desc: 'Track personal tasks with a celebratory finish.',
         plugins: { categoryGroup: false, finishRewards: true },
         defaultName: 'Personal Todos'
+    },
+    {
+        id: 'grocery',
+        icon: '🛒',
+        name: 'Grocery List',
+        desc: 'Smart category grouping for your shopping trips.',
+        plugins: { categoryGroup: true, finishRewards: true },
+        defaultName: 'Grocery List'
     },
     {
         id: 'blank',
