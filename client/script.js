@@ -1258,6 +1258,775 @@ window.resetWorkerUrl = function() {
 };
 
 
+// ══════════════════════════════════════════════════════════
+// RECURRING TASKS SYSTEM
+// ══════════════════════════════════════════════════════════
+
+// ─── Recurring Storage Helpers ────────────────────────────
+function loadRecurring() {
+    try { return JSON.parse(localStorage.getItem('liltask_recurring') || '[]'); }
+    catch(e) { return []; }
+}
+
+function saveRecurring(arr) {
+    localStorage.setItem('liltask_recurring', JSON.stringify(arr));
+}
+
+function loadRecurringCompletions() {
+    try { return JSON.parse(localStorage.getItem('liltask_rec_completions') || '{}'); }
+    catch(e) { return {}; }
+}
+
+function saveRecurringCompletions(obj) {
+    localStorage.setItem('liltask_rec_completions', JSON.stringify(obj));
+}
+
+function loadRecurringDeletions() {
+    try { return JSON.parse(localStorage.getItem('liltask_rec_deletions') || '{}'); }
+    catch(e) { return {}; }
+}
+
+function saveRecurringDeletions(obj) {
+    localStorage.setItem('liltask_rec_deletions', JSON.stringify(obj));
+}
+
+// ─── Date Key Helpers ─────────────────────────────────────
+function todayKey() {
+    const t = new Date();
+    return `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
+}
+
+function weekKey(date) {
+    const d = date || new Date();
+    const day = d.getDay();
+    const monday = new Date(d);
+    monday.setDate(d.getDate() - day + (day === 0 ? -6 : 1));
+    return `${monday.getFullYear()}-W${String(getISOWeek(monday)).padStart(2,'0')}`;
+}
+
+function getISOWeek(date) {
+    const d = new Date(date);
+    d.setHours(0,0,0,0);
+    d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+    const yearStart = new Date(d.getFullYear(), 0, 1);
+    return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+}
+
+function monthKey(date) {
+    const d = date || new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+
+// ─── Recurring Task Due Check ─────────────────────────────
+// Returns the "period key" for a recurring task on a given date (or today)
+function getRecurringPeriodKey(rec, date) {
+    const d = (date instanceof Date) ? date : (date ? new Date(date + 'T12:00:00') : new Date());
+    if (rec.type === 'daily') {
+        return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+    if (rec.type === 'weekly') return weekKey(d);
+    if (rec.type === 'monthly') return monthKey(d);
+    return '';
+}
+
+// Is this recurring task due on the given date?
+function isRecurringDueOn(rec, date) {
+    const d = date instanceof Date ? date : new Date(date + 'T12:00:00');
+    if (rec.type === 'daily') return true;
+    if (rec.type === 'weekly') {
+        const dow = d.getDay(); // 0=Sun
+        return rec.days && rec.days.includes(dow);
+    }
+    if (rec.type === 'monthly') {
+        return rec.dates && rec.dates.includes(d.getDate());
+    }
+    return false;
+}
+
+// Is this rec task deleted for a specific date (once) or globally (all future)?
+function isRecurringDeletedOn(rec, dateKey) {
+    const dels = loadRecurringDeletions();
+    if (dels[rec.id + ':all']) {
+        // deleted "all future" from a certain date
+        const fromKey = dels[rec.id + ':all'];
+        return dateKey >= fromKey;
+    }
+    return !!(dels[rec.id + ':' + dateKey]);
+}
+
+// Completion key for a rec task on a period
+function recCompletionKey(recId, periodKey) { return recId + ':' + periodKey; }
+
+// How many times is this rec due in the current period?
+// For early-completion tasks: weekly = number of selected days, monthly = number of selected dates
+function getRecurringPeriodTotal(rec) {
+    if (!rec.earlyCompletion) return 1; // simple done/not-done
+    if (rec.type === 'weekly') return rec.days ? rec.days.length : 1;
+    if (rec.type === 'monthly') return rec.dates ? rec.dates.length : 1;
+    return 1;
+}
+
+// How many completions recorded for this period?
+function getRecurringCompletionCount(rec, periodKey) {
+    const c = loadRecurringCompletions();
+    const v = c[recCompletionKey(rec.id, periodKey)];
+    if (typeof v === 'number') return v;
+    return v ? 1 : 0; // backwards compat with old boolean
+}
+
+// Is fully done for this period?
+function isRecurringDone(rec, periodKey) {
+    if (!rec.earlyCompletion) {
+        const c = loadRecurringCompletions();
+        return !!c[recCompletionKey(rec.id, periodKey)];
+    }
+    return getRecurringCompletionCount(rec, periodKey) >= getRecurringPeriodTotal(rec);
+}
+
+// Increment or decrement (toggle) completion count; for non-early tasks: boolean toggle
+function toggleRecurringCompletion(rec, periodKey) {
+    const c = loadRecurringCompletions();
+    const k = recCompletionKey(rec.id, periodKey);
+    if (!rec.earlyCompletion) {
+        if (c[k]) delete c[k]; else c[k] = true;
+    } else {
+        const total = getRecurringPeriodTotal(rec);
+        const cur = getRecurringCompletionCount(rec, periodKey);
+        // Cycle: 0 → 1 → … → total → 0
+        const next = cur >= total ? 0 : cur + 1;
+        if (next === 0) delete c[k]; else c[k] = next;
+    }
+    saveRecurringCompletions(c);
+}
+
+// Keep old setRecurringDone for cal-view toggle (simple boolean)
+function setRecurringDone(recId, periodKey, val) {
+    const rec = loadRecurring().find(r => r.id === recId) || { earlyCompletion: false };
+    const c = loadRecurringCompletions();
+    const k = recCompletionKey(recId, periodKey);
+    if (rec.earlyCompletion) {
+        // In cal view, just increment/decrement by 1
+        const cur = typeof c[k] === 'number' ? c[k] : (c[k] ? 1 : 0);
+        const total = getRecurringPeriodTotal(rec);
+        if (val) { c[k] = Math.min(cur + 1, total); }
+        else { const next = Math.max(cur - 1, 0); if (next === 0) delete c[k]; else c[k] = next; }
+    } else {
+        if (val) c[k] = true; else delete c[k];
+    }
+    saveRecurringCompletions(c);
+}
+
+// Should this task be visible today? (early-completion: always show whole week/month)
+function isRecurringVisibleToday(rec) {
+    if (!rec.earlyCompletion) {
+        // Standard: only show on due days
+        return isRecurringDueOn(rec, new Date());
+    }
+    // Early completion: show all week long (weekly) or all month (monthly)
+    return true; // daily is always visible
+}
+
+// ─── Get active recurring tasks for TODAY (list view) ────
+function getActiveRecurringToday() {
+    const recs = loadRecurring();
+    const tk = todayKey();
+    return recs.filter(rec => {
+        if (isRecurringDeletedOn(rec, tk)) return false;
+        return isRecurringVisibleToday(rec);
+    });
+}
+
+// Separate by type
+function getRecurringByType(type) {
+    return getActiveRecurringToday().filter(r => r.type === type);
+}
+
+// ─── Render Todos (patched to include recurring section) ──
+// We monkey-patch updateProgress to include recurring
+function getRecurringProgressToday() {
+    const recs = getActiveRecurringToday();
+    let total = 0, done = 0;
+    recs.forEach(rec => {
+        const pk = getRecurringPeriodKey(rec);
+        const t = getRecurringPeriodTotal(rec);
+        const d = Math.min(getRecurringCompletionCount(rec, pk), t);
+        total += t;
+        done += d;
+    });
+    return { done, total };
+}
+
+// ─── Patch renderTodos to show Recurring section ──────────
+const _origRenderTodos = renderTodos;
+renderTodos = function() {
+    if (!activeListId || currentView !== 'lists') return;
+    const container = document.getElementById('todos-container');
+    const arr = getOrCreateStore(activeListId).getState();
+
+    const global = arr.map((item, idx) => ({ ...item, idx })).filter(t => !t.dueDate);
+    const dated  = arr.map((item, idx) => ({ ...item, idx })).filter(t => !!t.dueDate);
+    dated.sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+
+    let html = '';
+
+    if (global.length > 0) {
+        html += `<div class="section-header">📋 Global Todos <span class="sh-count">${global.length}</span></div>`;
+        if (activePlugins().categoryGroup) {
+            const groups = {};
+            global.forEach(item => {
+                const cat = categorize(item.text);
+                if (!groups[cat]) groups[cat] = [];
+                groups[cat].push(item);
+            });
+            for (const [cat, items] of Object.entries(groups)) {
+                html += `<div class="category-header">${cat}</div>`;
+                items.forEach(item => { html += todoHTML(item, item.idx); });
+            }
+        } else {
+            global.forEach(item => { html += todoHTML(item, item.idx); });
+        }
+    }
+
+    if (dated.length > 0) {
+        html += `<div class="section-header">📅 Todos with Dues <span class="sh-count">${dated.length}</span></div>`;
+        dated.forEach(item => { html += todoHTML(item, item.idx); });
+    }
+
+    // ── Recurring Section ──────────────────────────────────
+    const daily = getRecurringByType('daily');
+    const weekly = getRecurringByType('weekly');
+    const monthly = getRecurringByType('monthly');
+    const anyRec = daily.length + weekly.length + monthly.length > 0;
+
+    if (anyRec) {
+        html += `<div class="section-header rec-section-header">🔁 Recurring <span class="sh-count">${daily.length + weekly.length + monthly.length}</span></div>`;
+
+        const renderRecGroup = (label, recs, type) => {
+            if (!recs.length) return '';
+            // Progress: sum counts vs totals
+            let totalSlots = 0, doneSlots = 0;
+            recs.forEach(r => {
+                const pk = getRecurringPeriodKey(r);
+                const t = getRecurringPeriodTotal(r);
+                const d = Math.min(getRecurringCompletionCount(r, pk), t);
+                totalSlots += t; doneSlots += d;
+            });
+            const pct = totalSlots ? Math.round((doneSlots / totalSlots) * 100) : 0;
+            let out = `<div class="rec-group-header">
+                <span class="rec-type-badge rec-${type}">${label}</span>
+                <div class="rec-mini-bar"><div class="rec-mini-fill" style="width:${pct}%"></div></div>
+                <span class="rec-mini-label">${doneSlots}/${totalSlots}</span>
+            </div>`;
+            recs.forEach(rec => {
+                const pk = getRecurringPeriodKey(rec);
+                const isEarly = rec.earlyCompletion;
+                const periodTotal = getRecurringPeriodTotal(rec);
+                const completionCount = Math.min(getRecurringCompletionCount(rec, pk), periodTotal);
+                const done = isRecurringDone(rec, pk);
+
+                // For early-completion tasks: show counter stepper instead of simple checkbox
+                let checkEl;
+                if (isEarly) {
+                    // Stepper: tap to increment, shows x/total
+                    checkEl = `<button class="rec-counter-btn ${done ? 'rec-counter-done' : ''}" onclick="toggleRecurring('${rec.id}', '${pk}')" title="Tap to mark one completion">
+                        <span class="rec-counter-val">${completionCount}</span>
+                        <span class="rec-counter-sep">/</span>
+                        <span class="rec-counter-tot">${periodTotal}</span>
+                    </button>`;
+                } else {
+                    checkEl = `<button class="todo-check ${done ? 'checked' : ''}" onclick="toggleRecurring('${rec.id}', '${pk}')"></button>`;
+                }
+
+                // Early-completion label suffix
+                const earlyTag = isEarly ? `<span class="rec-early-tag" title="Early completion allowed">⚡ early</span>` : '';
+
+                out += `<div class="todo-item rec-todo-item ${done ? 'done' : ''}" data-recid="${rec.id}">
+                    <div class="drag-handle" style="opacity:0.2;pointer-events:none">⣿</div>
+                    ${checkEl}
+                    <div class="todo-text" style="flex:1">${escHtml(rec.text)}</div>
+                    ${earlyTag}
+                    <span class="rec-badge rec-${type}">${type}</span>
+                    <div class="todo-actions">
+                        <button class="todo-act-btn" onclick="deleteRecurringFromList('${rec.id}')">✕</button>
+                    </div>
+                </div>`;
+            });
+            return out;
+        };
+
+        html += renderRecGroup('Daily', daily, 'daily');
+        html += renderRecGroup('Weekly', weekly, 'weekly');
+        html += renderRecGroup('Monthly', monthly, 'monthly');
+    }
+
+    if (!global.length && !dated.length && !anyRec) {
+        container.innerHTML = `<div class="empty-state"><div class="es-icon">📝</div><div class="es-title">No tasks yet</div><div class="es-desc">Add your first task above</div></div>`;
+        return;
+    }
+
+    container.innerHTML = html;
+    attachTodoListeners();
+    attachDragListeners();
+};
+
+// ─── Patch updateProgress ─────────────────────────────────
+const _origUpdateProgress = updateProgress;
+updateProgress = function() {
+    if (!activeListId) return;
+    const arr = getOrCreateStore(activeListId).getState();
+    const globalDone = arr.filter(t => t.done).length;
+    const globalTotal = arr.length;
+    const { done: recDone, total: recTotal } = getRecurringProgressToday();
+    const done = globalDone + recDone;
+    const total = globalTotal + recTotal;
+    const pct = total === 0 ? 0 : Math.round((done / total) * 100);
+    document.getElementById('progress-fill').style.width = pct + '%';
+    document.getElementById('progress-label').textContent = `${done} / ${total}`;
+};
+
+// ─── Toggle recurring completion ──────────────────────────
+window.toggleRecurring = function(recId, periodKey) {
+    const rec = loadRecurring().find(r => r.id === recId);
+    if (!rec) return;
+    const wasDone = isRecurringDone(rec, periodKey);
+    toggleRecurringCompletion(rec, periodKey);
+    renderTodos();
+    updateProgress();
+    const nowDone = isRecurringDone(rec, periodKey);
+    if (!wasDone && nowDone) {
+        const { done, total } = getRecurringProgressToday();
+        const arr = getOrCreateStore(activeListId).getState();
+        const allTodoDone = arr.every(t => t.done);
+        if (allTodoDone && done === total && activePlugins().finishRewards) celebrate();
+    }
+};
+
+// ─── Delete recurring from list view ─────────────────────
+window.deleteRecurringFromList = function(recId) {
+    const tk = todayKey();
+    openModal(`<div class="modal-title">Delete recurring task?</div>
+    <p style="color:var(--text3);font-size:14px;margin-bottom:16px">Remove just today, or all future occurrences?</p>
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="closeModal()">Cancel</button>
+        <button class="modal-btn" onclick="deleteRecurringOnce('${recId}', '${tk}')">Just today</button>
+        <button class="modal-btn" style="background:var(--red);border-color:var(--red);color:#fff" onclick="deleteRecurringAllFuture('${recId}', '${tk}')">All future</button>
+    </div>`);
+};
+
+window.deleteRecurringOnce = function(recId, dateKey) {
+    const dels = loadRecurringDeletions();
+    dels[recId + ':' + dateKey] = true;
+    saveRecurringDeletions(dels);
+    closeModal();
+    renderTodos(); updateProgress();
+};
+
+window.deleteRecurringAllFuture = function(recId, fromKey) {
+    const dels = loadRecurringDeletions();
+    dels[recId + ':all'] = fromKey;
+    saveRecurringDeletions(dels);
+    closeModal();
+    renderTodos(); updateProgress();
+};
+
+// ─── Calendar: Recurring Tasks Button & Modal ─────────────
+window.openRecurringModal = function() {
+    const recs = loadRecurring();
+    const dels = loadRecurringDeletions();
+    const activeRecs = recs.filter(r => !dels[r.id + ':all']);
+
+    const typeLabel = { daily: '🌅 Daily', weekly: '📆 Weekly', monthly: '🗓️ Monthly' };
+    const typeBadge = { daily: 'daily', weekly: 'weekly', monthly: 'monthly' };
+
+    const listHTML = activeRecs.length ? activeRecs.map(r => `
+        <div class="rec-manage-row">
+            <span class="rec-badge rec-${typeBadge[r.type]}">${typeLabel[r.type]}</span>
+            <span style="flex:1;font-size:13px;color:var(--text)">${escHtml(r.text)}</span>
+            <button class="todo-act-btn" onclick="openDeleteRecurringManage('${r.id}')">✕</button>
+        </div>`).join('') :
+        `<p style="color:var(--text3);font-size:13px;padding:8px 0 4px">No recurring tasks yet.</p>`;
+
+    openModal(`<div class="modal-title">🔁 Recurring Tasks</div>
+    <div id="rec-list" style="margin-bottom:16px;max-height:220px;overflow-y:auto">${listHTML}</div>
+    <button class="modal-btn primary" style="width:100%" onclick="openNewRecurringFlow()">＋ New recurring task</button>
+    <div class="modal-actions"><button class="modal-btn" onclick="closeModal()">Close</button></div>`);
+};
+
+window.openDeleteRecurringManage = function(recId) {
+    const tk = todayKey();
+    openModal(`<div class="modal-title">Delete recurring task?</div>
+    <p style="color:var(--text3);font-size:14px;margin-bottom:16px">Remove just today, or stop all future occurrences?</p>
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="openRecurringModal()">Cancel</button>
+        <button class="modal-btn" onclick="deleteRecurringOnce('${recId}', '${tk}');openRecurringModal()">Just today</button>
+        <button class="modal-btn" style="background:var(--red);border-color:var(--red);color:#fff" onclick="deleteRecurringAllFuture('${recId}', '${tk}');openRecurringModal()">All future</button>
+    </div>`);
+};
+
+// ─── New Recurring Flow ───────────────────────────────────
+let _newRec = {}; // temp state for wizard
+
+window.openNewRecurringFlow = function() {
+    _newRec = {};
+    openModal(`<div class="modal-title">New recurring task</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:18px">How often should this repeat?</p>
+    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
+        <button class="modal-btn rec-freq-btn" onclick="selectRecurringFreq('daily')">
+            <span style="font-size:20px">🌅</span>
+            <div>
+                <div style="font-weight:700;color:var(--text)">Daily</div>
+                <div style="font-size:11px;color:var(--text3)">Due every single day</div>
+            </div>
+        </button>
+        <button class="modal-btn rec-freq-btn" onclick="selectRecurringFreq('weekly')">
+            <span style="font-size:20px">📆</span>
+            <div>
+                <div style="font-weight:700;color:var(--text)">Weekly</div>
+                <div style="font-size:11px;color:var(--text3)">Pick specific days of the week</div>
+            </div>
+        </button>
+        <button class="modal-btn rec-freq-btn" onclick="selectRecurringFreq('monthly')">
+            <span style="font-size:20px">🗓️</span>
+            <div>
+                <div style="font-weight:700;color:var(--text)">Monthly</div>
+                <div style="font-size:11px;color:var(--text3)">Pick dates each month</div>
+            </div>
+        </button>
+    </div>
+    <div class="modal-actions"><button class="modal-btn" onclick="openRecurringModal()">Back</button></div>`);
+};
+
+window.selectRecurringFreq = function(type) {
+    _newRec.type = type;
+    if (type === 'daily') {
+        openRecurringTaskInput();
+    } else if (type === 'weekly') {
+        openRecurringWeekdayPicker();
+    } else if (type === 'monthly') {
+        openRecurringMonthDatePicker();
+    }
+};
+
+window.openRecurringWeekdayPicker = function() {
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    _newRec.days = _newRec.days || [];
+    const btns = dayNames.map((d, i) => {
+        const sel = _newRec.days.includes(i);
+        return `<button class="rec-day-btn ${sel ? 'selected' : ''}" id="rdayBtn${i}" onclick="toggleRecurringDay(${i})">${d}</button>`;
+    }).join('');
+
+    openModal(`<div class="modal-title">Pick days of the week</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:16px">Task will be due on selected days each week.</p>
+    <div class="rec-day-grid">${btns}</div>
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="openNewRecurringFlow()">Back</button>
+        <button class="modal-btn primary" onclick="confirmRecurringWeekdays()">Next →</button>
+    </div>`);
+};
+
+window.toggleRecurringDay = function(i) {
+    if (!_newRec.days) _newRec.days = [];
+    const idx = _newRec.days.indexOf(i);
+    if (idx === -1) _newRec.days.push(i); else _newRec.days.splice(idx, 1);
+    const btn = document.getElementById('rdayBtn' + i);
+    if (btn) btn.classList.toggle('selected', _newRec.days.includes(i));
+};
+
+window.confirmRecurringWeekdays = function() {
+    if (!_newRec.days || _newRec.days.length === 0) {
+        alert('Pick at least one day.');
+        return;
+    }
+    openRecurringEarlyCompletionStep();
+};
+
+window.openRecurringMonthDatePicker = function() {
+    _newRec.dates = _newRec.dates || [];
+    const today = new Date();
+    const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+    let cells = '';
+    for (let d = 1; d <= daysInMonth; d++) {
+        const sel = _newRec.dates.includes(d);
+        cells += `<button class="rec-cal-date-btn ${sel ? 'selected' : ''}" id="rcalBtn${d}" onclick="toggleRecurringDate(${d})">${d}</button>`;
+    }
+    openModal(`<div class="modal-title">Pick dates each month</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:14px">Task will be due on these dates every month.</p>
+    <div class="rec-cal-date-grid">${cells}</div>
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="openNewRecurringFlow()">Back</button>
+        <button class="modal-btn primary" onclick="confirmRecurringDates()">Next →</button>
+    </div>`);
+};
+
+window.toggleRecurringDate = function(d) {
+    if (!_newRec.dates) _newRec.dates = [];
+    const idx = _newRec.dates.indexOf(d);
+    if (idx === -1) _newRec.dates.push(d); else _newRec.dates.splice(idx, 1);
+    const btn = document.getElementById('rcalBtn' + d);
+    if (btn) btn.classList.toggle('selected', _newRec.dates.includes(d));
+};
+
+window.confirmRecurringDates = function() {
+    if (!_newRec.dates || _newRec.dates.length === 0) {
+        alert('Pick at least one date.');
+        return;
+    }
+    openRecurringEarlyCompletionStep();
+};
+
+window.openRecurringEarlyCompletionStep = function() {
+    const isWeekly = _newRec.type === 'weekly';
+    const count = isWeekly ? (_newRec.days || []).length : (_newRec.dates || []).length;
+    const periodLabel = isWeekly ? 'week' : 'month';
+    const desc = isWeekly
+        ? `You selected ${count} day${count !== 1 ? 's' : ''} per week.`
+        : `You selected ${count} date${count !== 1 ? 's' : ''} per month.`;
+
+    const earlyOn = !!_newRec.earlyCompletion;
+
+    openModal(`<div class="modal-title">Early completion</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:16px">${desc}</p>
+
+    <div style="padding:14px 16px;background:var(--bg3);border:1.5px solid ${earlyOn ? 'var(--accent)' : 'var(--border)'};border-radius:var(--radius);margin-bottom:16px;transition:border-color 0.2s" id="early-card">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+            <span style="font-size:22px">⚡</span>
+            <div style="flex:1">
+                <div style="font-size:13px;font-weight:700;color:var(--text)">Allow early completion</div>
+                <div style="font-size:11px;color:var(--text3);margin-top:2px">Show this task all ${periodLabel} so you can complete it ahead of schedule</div>
+            </div>
+            <button id="early-toggle" onclick="toggleEarlyCompletion()" style="width:44px;height:24px;border-radius:12px;border:none;cursor:pointer;position:relative;flex-shrink:0;background:${earlyOn ? 'var(--accent)' : 'var(--border)'};transition:background 0.2s">
+                <span style="position:absolute;top:3px;left:${earlyOn ? '23px' : '3px'};width:18px;height:18px;border-radius:50%;background:#fff;transition:left 0.2s;display:block" id="early-thumb"></span>
+            </button>
+        </div>
+        ${earlyOn ? `<div style="font-size:11px;color:var(--accent);font-family:var(--mono);padding:6px 8px;background:var(--accent-glow);border-radius:6px;margin-top:2px">
+            Progress tracked as <strong>${count > 1 ? '0/'+count : '0/1'}</strong> — tap to count each completion this ${periodLabel}
+        </div>` : `<div style="font-size:11px;color:var(--text3);padding:6px 8px;background:var(--bg4);border-radius:6px;margin-top:2px">
+            Task only visible on its scheduled day${count !== 1 ? 's' : ''}
+        </div>`}
+    </div>
+
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="${_newRec.type === 'weekly' ? 'openRecurringWeekdayPicker()' : 'openRecurringMonthDatePicker()'}">Back</button>
+        <button class="modal-btn primary" onclick="openRecurringTaskInput()">Next →</button>
+    </div>`);
+};
+
+window.toggleEarlyCompletion = function() {
+    _newRec.earlyCompletion = !_newRec.earlyCompletion;
+    // Re-render this step in-place
+    openRecurringEarlyCompletionStep();
+};
+
+window.openRecurringTaskInput = function() {
+    const typeLabel = { daily: 'Daily', weekly: 'Weekly', monthly: 'Monthly' };
+    const backFn = _newRec.type === 'daily' ? 'openNewRecurringFlow()' :
+                   _newRec.type === 'weekly' ? 'openRecurringEarlyCompletionStep()' :
+                   'openRecurringEarlyCompletionStep()';
+    openModal(`<div class="modal-title">Name your task</div>
+    <p style="color:var(--text3);font-size:13px;margin-bottom:12px">This will repeat <strong style="color:var(--accent)">${typeLabel[_newRec.type]}</strong>${_newRec.earlyCompletion ? ' <span style="color:var(--green);font-size:11px">⚡ early completion on</span>' : ''}.</p>
+    <input class="modal-input" id="rec-task-inp" placeholder="e.g. Morning workout…" autocomplete="off"/>
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="${backFn}">Back</button>
+        <button class="modal-btn primary" onclick="saveNewRecurringTask()">Create</button>
+    </div>`);
+    setTimeout(() => {
+        const inp = document.getElementById('rec-task-inp');
+        if (inp) {
+            inp.focus();
+            inp.addEventListener('keydown', e => { if (e.key === 'Enter') saveNewRecurringTask(); });
+        }
+    }, 50);
+};
+
+window.saveNewRecurringTask = function() {
+    const inp = document.getElementById('rec-task-inp');
+    const text = inp?.value.trim();
+    if (!text) return;
+    const recs = loadRecurring();
+    const newRec = {
+        id: generateId(),
+        type: _newRec.type,
+        text,
+        created: todayKey(),
+        earlyCompletion: !!_newRec.earlyCompletion,
+    };
+    if (_newRec.type === 'weekly') newRec.days = [..._newRec.days];
+    if (_newRec.type === 'monthly') newRec.dates = [..._newRec.dates];
+    recs.push(newRec);
+    saveRecurring(recs);
+    _newRec = {};
+    closeModal();
+    renderTodos();
+    updateProgress();
+    if (currentView === 'calendar') renderCalendar();
+};
+
+// ─── Patch calCell to show recurring blips ────────────────
+const _origCalCell = calCell;
+function calCellWithRecurring(year, month, day, otherMonth, today) {
+    const realMonth = ((month % 12) + 12) % 12;
+    const realYear = year + Math.floor(month / 12);
+    const dateKey = `${realYear}-${String(realMonth + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    const date = new Date(realYear, realMonth, day);
+    const isToday = today.getFullYear() === realYear && today.getMonth() === realMonth && today.getDate() === day;
+
+    const allTodos = getCalTodosForDate(dateKey);
+    const hasTodos = allTodos.length > 0;
+
+    // Recurring due on this date
+    const recs = loadRecurring();
+    const recsDue = recs.filter(r => {
+        if (isRecurringDeletedOn(r, dateKey)) return false;
+        return isRecurringDueOn(r, date);
+    });
+    const recDaily = recsDue.filter(r => r.type === 'daily');
+    const recWeekly = recsDue.filter(r => r.type === 'weekly');
+    const recMonthly = recsDue.filter(r => r.type === 'monthly');
+
+    const previews = allTodos.slice(0, 2).map(t =>
+        `<div class="cal-todo-preview ${t.done ? 'done-prev' : ''}">${escHtml(t.text.substring(0, 18))}${t.text.length > 18 ? '…' : ''}</div>`
+    ).join('');
+
+    const dots = allTodos.slice(0, 7).map(t =>
+        `<div class="cal-dot ${t.done ? 'done-dot' : ''}"></div>`
+    ).join('');
+
+    // Recurring blips
+    let recBlips = '';
+    if (recDaily.length) recBlips += `<div class="rec-blip rec-blip-daily" title="${recDaily.length} daily"></div>`;
+    if (recWeekly.length) recBlips += `<div class="rec-blip rec-blip-weekly" title="${recWeekly.length} weekly"></div>`;
+    if (recMonthly.length) recBlips += `<div class="rec-blip rec-blip-monthly" title="${recMonthly.length} monthly"></div>`;
+
+    const dotsHTML = (hasTodos || recsDue.length) ? `<div class="cal-dots">${dots}${recBlips}</div>` : '';
+
+    return `<div class="cal-cell ${otherMonth ? 'other-month' : ''} ${isToday ? 'today' : ''} ${(hasTodos || recsDue.length) ? 'has-todos' : ''}"
+        onclick="openCalDateModal('${dateKey}')">
+        <div class="cal-date">${day}</div>
+        ${previews}
+        ${dotsHTML}
+        </div>`;
+}
+
+// ─── Patch openCalDateModal to show recurring entries ─────
+const _origOpenCalDateModal = window.openCalDateModal;
+window.openCalDateModal = function(dateKey) {
+    const [y, m, d] = dateKey.split('-');
+    const label = `${MONTH_NAMES[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
+    const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
+
+    function buildRecHTML() {
+        const recs = loadRecurring();
+        const recsDue = recs.filter(r => {
+            if (isRecurringDeletedOn(r, dateKey)) return false;
+            return isRecurringDueOn(r, date);
+        });
+        if (!recsDue.length) return '';
+        return `<div style="margin-bottom:12px">
+            <div style="font-size:11px;font-family:var(--mono);letter-spacing:1px;text-transform:uppercase;color:var(--text3);margin-bottom:8px">🔁 Recurring</div>
+            ${recsDue.map(rec => {
+                const pk = getRecurringPeriodKey(rec, date);
+                const done = isRecurringDone(rec, pk);
+                return `<div class="cal-modal-todo" style="gap:8px">
+                    <button class="todo-check ${done ? 'checked' : ''}" onclick="calToggleRecurring('${rec.id}', '${pk}', '${dateKey}')"></button>
+                    <span style="flex:1;${done ? 'text-decoration:line-through;color:var(--text3)' : ''}">
+                        ${escHtml(rec.text)}
+                    </span>
+                    <span class="rec-badge rec-${rec.type}" style="font-size:10px">${rec.type}</span>
+                    <button class="todo-act-btn" onclick="calDeleteRecurring('${rec.id}', '${dateKey}')">✕</button>
+                </div>`;
+            }).join('')}
+        </div>`;
+    }
+
+    function buildModalHTML() {
+        const items = getOrCreateStore(activeListId).getState()
+            .filter(t => t.dueDate === dateKey);
+        const itemsHTML = items.length
+            ? items.map(t => `
+            <div class="cal-modal-todo" data-id="${t.id}">
+                <button class="todo-check ${t.done ? 'checked' : ''}" onclick="calToggleTodo('${dateKey}', '${t.id}')"></button>
+                <span style="flex:1;${t.done ? 'text-decoration:line-through;color:var(--text3)' : ''}">${escHtml(t.text)}</span>
+                <button class="todo-act-btn" onclick="calDeleteTodo('${dateKey}', '${t.id}')">✕</button>
+            </div>`).join('')
+            : `<p style="color:var(--text3);font-size:13px;padding:8px 0">No tasks for this day yet.</p>`;
+        return itemsHTML;
+    }
+
+    openModal(`<div class="modal-title">📅 ${label}</div>
+    <p style="color:var(--text3);font-size:12px;margin-bottom:12px">Tasks from: <strong>${escHtml(lists[activeListId]?.name || 'current list')}</strong></p>
+    ${buildRecHTML()}
+    <div id="cal-date-todos">${buildModalHTML()}</div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+        <input class="modal-input" id="cal-todo-inp" placeholder="Add task for this day…" style="margin-bottom:0;flex:1" autocomplete="off"/>
+        <button class="modal-btn primary" onclick="calAddTodo('${dateKey}')">Add</button>
+    </div>
+    <div class="modal-actions"><button class="modal-btn primary" onclick="closeModal();renderCalendar()">Done</button></div>`);
+    setTimeout(() => {
+        const inp = document.getElementById('cal-todo-inp');
+        if (inp) inp.addEventListener('keydown', e => { if (e.key === 'Enter') calAddTodo(dateKey); });
+    }, 50);
+    window._calDateKey = dateKey;
+};
+
+window.calToggleRecurring = function(recId, periodKey, dateKey) {
+    const wasDone = isRecurringDone({ id: recId }, periodKey);
+    setRecurringDone(recId, periodKey, !wasDone);
+    // Re-open to refresh
+    window.openCalDateModal(dateKey);
+    updateProgress();
+    renderTodos();
+};
+
+window.calDeleteRecurring = function(recId, dateKey) {
+    openModal(`<div class="modal-title">Remove recurring task?</div>
+    <p style="color:var(--text3);font-size:14px;margin-bottom:16px">Remove just this date, or stop all future occurrences?</p>
+    <div class="modal-actions">
+        <button class="modal-btn" onclick="window.openCalDateModal('${dateKey}')">Cancel</button>
+        <button class="modal-btn" onclick="deleteRecurringOnce('${recId}', '${dateKey}');window.openCalDateModal('${dateKey}');renderCalendar()">Just this date</button>
+        <button class="modal-btn" style="background:var(--red);border-color:var(--red);color:#fff" onclick="deleteRecurringAllFuture('${recId}', '${dateKey}');window.openCalDateModal('${dateKey}');renderCalendar()">All future</button>
+    </div>`);
+};
+
+// ─── Patch renderCalendar to use new calCell ──────────────
+const _origRenderCalendar = renderCalendar;
+renderCalendar = function() {
+    document.getElementById('cal-title').textContent = `${MONTH_NAMES[calMonth]} ${calYear}`;
+    const header = document.getElementById('cal-header');
+    header.innerHTML = DAY_NAMES.map(d => `<div class="cal-day-name">${d}</div>`).join('');
+
+    const grid = document.getElementById('cal-grid');
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth + 1, 0).getDate();
+    const daysInPrev = new Date(calYear, calMonth, 0).getDate();
+    const today = new Date();
+
+    let cells = '';
+    for (let i = firstDay - 1; i >= 0; i--) {
+        const d = daysInPrev - i;
+        cells += calCellWithRecurring(calYear, calMonth - 1, d, true, today);
+    }
+    for (let d = 1; d <= daysInMonth; d++) {
+        cells += calCellWithRecurring(calYear, calMonth, d, false, today);
+    }
+    const total = firstDay + daysInMonth;
+    const nextCells = total % 7 === 0 ? 0 : 7 - (total % 7);
+    for (let d = 1; d <= nextCells; d++) {
+        cells += calCellWithRecurring(calYear, calMonth + 1, d, true, today);
+    }
+    grid.innerHTML = cells;
+
+    // Inject "Recurring Tasks" button below cal nav
+    let recBtn = document.getElementById('cal-recurring-btn');
+    if (!recBtn) {
+        recBtn = document.createElement('div');
+        recBtn.id = 'cal-recurring-btn-wrap';
+        recBtn.innerHTML = `<button id="cal-recurring-btn" class="modal-btn rec-cal-btn" onclick="openRecurringModal()">🔁 Recurring Tasks</button>`;
+        const calView = document.getElementById('calendar-view');
+        const calNav = calView.querySelector('.cal-nav');
+        calNav.after(recBtn);
+    }
+};
+
 // ─── Init ─────────────────────────────────────────────────
 function appInit() {
     load();

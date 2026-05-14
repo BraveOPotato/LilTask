@@ -964,3 +964,228 @@ flex-shrink: 0;
 #sync-btn:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-glow); }
 #sync-btn.spinning svg { animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══════════════════════════════════════════════════════════
+   RECURRING TASKS STYLES
+   ══════════════════════════════════════════════════════════ */
+
+/* ─── Recurring badges ─── */
+.rec-badge {
+    font-size: 9px;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+.rec-daily  { background: rgba(34,211,160,0.15); color: #22d3a0; border: 1px solid rgba(34,211,160,0.3); }
+.rec-weekly { background: rgba(124,106,255,0.15); color: var(--accent); border: 1px solid rgba(124,106,255,0.3); }
+.rec-monthly { background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.3); }
+
+/* ─── Recurring section in list view ─── */
+.rec-section-header { margin-top: 8px; }
+
+.rec-group-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 14px 4px;
+    margin: 4px 0 2px;
+}
+.rec-mini-bar {
+    flex: 1;
+    height: 4px;
+    background: var(--bg4);
+    border-radius: 2px;
+    overflow: hidden;
+}
+.rec-mini-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+.rec-mini-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text3);
+    flex-shrink: 0;
+}
+
+.rec-todo-item { opacity: 1; }
+.rec-todo-item.done { opacity: 0.55; }
+
+/* ─── Recurring type badge in todos ─── */
+.rec-badge { margin-left: 4px; }
+
+/* ─── Manage modal rows ─── */
+.rec-manage-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius);
+    background: var(--bg3);
+    border: 1px solid var(--border);
+    margin-bottom: 6px;
+}
+
+/* ─── Frequency picker buttons ─── */
+.rec-freq-btn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 14px !important;
+    padding: 14px 16px !important;
+    width: 100% !important;
+    text-align: left !important;
+    background: var(--bg3) !important;
+    border-color: var(--border) !important;
+    border-radius: var(--radius) !important;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.rec-freq-btn:hover {
+    border-color: var(--accent) !important;
+    background: var(--accent-glow) !important;
+}
+
+/* ─── Weekday picker ─── */
+.rec-day-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 6px;
+    margin-bottom: 16px;
+}
+.rec-day-btn {
+    padding: 10px 4px;
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--bg3);
+    color: var(--text2);
+    font-family: var(--font);
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+}
+.rec-day-btn:hover { border-color: var(--accent); color: var(--text); }
+.rec-day-btn.selected {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ─── Monthly date picker ─── */
+.rec-cal-date-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 5px;
+    margin-bottom: 16px;
+}
+.rec-cal-date-btn {
+    aspect-ratio: 1;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: var(--bg3);
+    color: var(--text2);
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.rec-cal-date-btn:hover { border-color: var(--accent); color: var(--text); }
+.rec-cal-date-btn.selected {
+    background: var(--accent-glow);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ─── Calendar recurring blips ─── */
+.rec-blip {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.rec-blip-daily  { background: #22d3a0; }
+.rec-blip-weekly { background: var(--accent); }
+.rec-blip-monthly { background: #fbbf24; }
+
+/* ─── Recurring button in calendar view ─── */
+#cal-recurring-btn-wrap {
+    display: flex;
+    justify-content: center;
+    padding: 8px 16px 2px;
+}
+.rec-cal-btn {
+    display: flex !important;
+    align-items: center !important;
+    gap: 6px !important;
+    font-size: 13px !important;
+    padding: 7px 16px !important;
+    border-radius: 20px !important;
+    background: var(--accent-glow) !important;
+    border-color: var(--accent) !important;
+    color: var(--accent) !important;
+    font-weight: 700 !important;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.rec-cal-btn:hover {
+    background: var(--accent) !important;
+    color: #fff !important;
+}
+
+/* ─── Early completion counter ─── */
+.rec-counter-btn {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    min-width: 48px;
+    height: 28px;
+    padding: 0 8px;
+    border-radius: 14px;
+    border: 1.5px solid var(--border);
+    background: var(--bg3);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+.rec-counter-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-glow);
+}
+.rec-counter-btn.rec-counter-done {
+    border-color: var(--green);
+    color: var(--green);
+    background: rgba(34,211,160,0.12);
+}
+.rec-counter-val { font-size: 14px; }
+.rec-counter-sep { font-size: 11px; opacity: 0.5; margin: 0 1px; }
+.rec-counter-tot { font-size: 11px; opacity: 0.65; }
+
+/* ─── Early tag ─── */
+.rec-early-tag {
+    font-size: 9px;
+    font-family: var(--mono);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--green);
+    background: rgba(34,211,160,0.12);
+    border: 1px solid rgba(34,211,160,0.25);
+    border-radius: 4px;
+    padding: 2px 5px;
+    flex-shrink: 0;
+}
