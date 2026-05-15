@@ -4,7 +4,7 @@
   "description": "Collaborative todo lists with real-time sync",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "any",
+  "orientation": "natural",
   "background_color": "#0f0f11",
   "theme_color": "#0f0f11",
   "categories": ["productivity", "utilities"],
