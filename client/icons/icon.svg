@@ -1,47 +1,67 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="liltask.cc logo">
-  <defs>
-    <linearGradient id="g" x1="64" y1="64" x2="448" y2="448" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8b5cf6"></stop>
-      <stop offset="1" stop-color="#06b6d4"></stop>
-    </linearGradient>
+<svg width="256" height="256" viewBox="0 0 160 160" fill="none" xmlns="http://www.w3.org/2000/svg">
 
-    <linearGradient id="shine" x1="140" y1="120" x2="360" y2="360" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.95"></stop>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0.65"></stop>
-    </linearGradient>
+<defs>
 
-    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%">
-      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#0f172a" flood-opacity="0.22"></feDropShadow>
-    </filter>
-  </defs>
+<linearGradient id="lilGradient" x1="24" y1="20" x2="180" y2="180" gradientUnits="userSpaceOnUse">
 
-  <g filter="url(#shadow)">
-    <path d="M256 44
-         C319 44 379 69 421 111
-         C463 153 488 213 488 276
-         C488 399 389 468 256 468
-         C123 468 24 399 24 276
-         C24 213 49 153 91 111
-         C133 69 193 44 256 44Z" fill="url(#g)"></path>
+<stop offset="0%" stop-color="#7C3AED"/>
 
-    <path d="M168 161
-         C168 141 184 125 204 125
-         H308
-         C328 125 344 141 344 161
-         V188
-         C344 208 328 224 308 224
-         H204
-         C184 224 168 208 168 188Z" fill="#ffffff" fill-opacity="0.16"></path>
+<stop offset="100%" stop-color="#00C2FF"/>
 
-    <path d="M153 271
-         L217 335
-         L359 177" fill="none" stroke="url(#shine)" stroke-width="34" stroke-linecap="round" stroke-linejoin="round"></path>
+</linearGradient>
 
-    <circle cx="146" cy="174" r="20" fill="#ffffff" fill-opacity="0.88"></circle>
-    <circle cx="366" cy="174" r="20" fill="#ffffff" fill-opacity="0.88"></circle>
-    <circle cx="256" cy="388" r="18" fill="#ffffff" fill-opacity="0.28"></circle>
+<filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
 
-    <path d="M146 174
-         Q256 252 366 174" fill="none" stroke="#ffffff" stroke-opacity="0.18" stroke-width="10" stroke-linecap="round"></path>
-  </g>
+<feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#6D28D9" flood-opacity="0.18"/>
+
+</filter>
+
+</defs>
+
+<g filter="url(#softShadow)">
+
+<!-- Main rounded tile -->
+
+<rect x="0" y="0" width="160" height="160" rx="42" fill="#0F172A"/>
+
+<!-- Gradient corner -->
+
+<path
+
+d="M98 0H118C141 0 160 19 160 42V62C160 76 149 88 135 88H122C109 88 98 77 98 64V0Z"
+
+fill="url(#lilGradient)"
+
+/>
+
+<!-- Checklist -->
+
+<g opacity="0.96">
+
+<rect x="42" y="48" width="54" height="10" rx="5" fill="white"/>
+
+<rect x="42" y="78" width="76" height="10" rx="5" fill="white" opacity="0.82"/>
+
+<rect x="42" y="108" width="60" height="10" rx="5" fill="white" opacity="0.55"/>
+
+</g>
+
+<!-- Checkmark -->
+
+<path
+
+d="M112 112L124 124L146 98"
+
+stroke="url(#lilGradient)"
+
+stroke-width="10"
+
+stroke-linecap="round"
+
+stroke-linejoin="round"
+
+/>
+
+</g>
+
 </svg>
