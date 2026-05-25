@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import type { KeyboardEvent } from 'react';
 import { TodoItem as TodoModel } from '../models';
 import { appStore } from '../store/AppStore';
 
@@ -9,9 +10,12 @@ interface Props {
   onDragStart: (idx: number) => void;
   onDragOver: (idx: number) => void;
   onDrop: () => void;
+  onTouchStart: (idx: number, y: number) => void;
+  onTouchMove: (y: number) => void;
+  onTouchEnd: () => void;
 }
 
-export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDrop }: Props) {
+export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDrop, onTouchStart, onTouchMove, onTouchEnd }: Props) {
   const [editing, setEditing]   = useState(false);
   const [editText, setEditText] = useState(todo.text);
   const [editDue, setEditDue]   = useState(todo.dueDate ?? '');
@@ -19,19 +23,24 @@ export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDr
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
+  // Sync text if todo changes externally
+  useEffect(() => {
+    if (!editing) { setEditText(todo.text); setEditDue(todo.dueDate ?? ''); }
+  }, [todo.text, todo.dueDate, editing]);
+
   function commitEdit() {
     const t = editText.trim();
     if (t) appStore.editTodo(listId, todo.id, t, editDue || undefined);
     setEditing(false);
   }
 
-  function onKeyDown(e: React.KeyboardEvent) {
+  function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Enter')  commitEdit();
     if (e.key === 'Escape') { setEditing(false); setEditText(todo.text); setEditDue(todo.dueDate ?? ''); }
   }
 
-  const overdue   = todo.isOverdue();
-  const dueToday  = todo.isDueToday();
+  const overdue  = todo.isOverdue();
+  const dueToday = todo.isDueToday();
 
   return (
     <div
@@ -42,7 +51,14 @@ export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDr
       onDragOver={e => { e.preventDefault(); onDragOver(index); }}
       onDrop={onDrop}
     >
-      <div className="drag-handle">⣿</div>
+      {/* Drag handle — also handles touch drag */}
+      <div
+        className="drag-handle"
+        onTouchStart={e => onTouchStart(index, e.touches[0].clientY)}
+        onTouchMove={e => { e.preventDefault(); onTouchMove(e.touches[0].clientY); }}
+        onTouchEnd={onTouchEnd}
+        style={{ touchAction: 'none' }}
+      >⣿</div>
 
       <button
         className={`todo-check ${todo.done ? 'checked' : ''}`}
@@ -69,22 +85,21 @@ export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDr
             />
           </div>
         ) : (
-          <span onDoubleClick={() => setEditing(true)}>{todo.text}</span>
+          // Single click to edit (touch-friendly)
+          <span
+            onClick={() => setEditing(true)}
+            style={{ cursor: 'text', display: 'block', minHeight: 20 }}
+          >{todo.text}</span>
         )}
       </div>
 
-      {/* Due date badge */}
       {todo.dueDate && !editing && (
-        <span
-          className={`due-badge ${overdue ? 'overdue' : dueToday ? 'today' : ''}`}
-          title={todo.dueDate}
-        >
+        <span className={`due-badge ${overdue ? 'overdue' : dueToday ? 'today' : ''}`} title={todo.dueDate}>
           📅 {todo.dueDate}
         </span>
       )}
 
       <div className="todo-actions">
-        <button className="todo-act-btn" onClick={() => setEditing(true)} title="Edit">✎</button>
         <button className="todo-act-btn" onClick={() => appStore.deleteTodo(listId, todo.id)} title="Delete">✕</button>
       </div>
     </div>

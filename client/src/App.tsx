@@ -15,46 +15,30 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
-    // Handle URL room
     const parsed = appStore.parseRoomFromURL();
-    if (parsed) {
-      appStore.joinRoom(parsed.roomId, parsed.name, parsed.plugins);
-    }
-
+    if (parsed) appStore.joinRoom(parsed.roomId, parsed.name, parsed.plugins);
     appStore.ensureDefaultList();
-
-    // Open new-list modal if only placeholder
-    const realLists = appStore.lists;
-    if (realLists.length === 0) {
-      modal.open(<NewListModal onClose={() => {}} />);
-    }
-
+    if (appStore.lists.length === 0) modal.open(<NewListModal onClose={() => {}} />);
     appStore.startPolling();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function toggleSidebar() { setSidebarOpen(v => !v); }
-  function closeSidebar()  { setSidebarOpen(false);   }
-
   return (
     <ModalContext.Provider value={modal}>
       <div id="app">
-        {/* Mobile sidebar backdrop */}
-        {sidebarOpen && (
-          <div id="sidebar-backdrop" className="active" onClick={closeSidebar} />
-        )}
+        {sidebarOpen && <div id="sidebar-backdrop" className="active" onClick={() => setSidebarOpen(false)} />}
 
-        <div id="sidebar" className={sidebarOpen ? 'open' : ''}>
+        {/* Sidebar: single element owns #sidebar id + open class */}
+        <nav id="sidebar" className={sidebarOpen ? 'open' : ''}>
           <Sidebar
             view={view}
-            onSwitchView={v => { setView(v); closeSidebar(); }}
-            onClose={closeSidebar}
+            onSwitchView={v => { setView(v); setSidebarOpen(false); }}
+            onClose={() => setSidebarOpen(false)}
           />
-        </div>
+        </nav>
 
         <div id="main">
-          <Header onMenuToggle={toggleSidebar} />
-
+          <Header onMenuToggle={() => setSidebarOpen(v => !v)} />
           {view === 'lists'    && <TodoView />}
           {view === 'calendar' && <CalendarView />}
         </div>

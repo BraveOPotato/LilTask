@@ -25,10 +25,7 @@ export function RecurringModal() {
             <div key={r.id} className="rec-manage-row">
               <span className={`rec-badge rec-${r.type}`}>{typeLabel[r.type]}</span>
               <span style={{ flex: 1, fontSize: 13, color: 'var(--text)' }}>{r.text}</span>
-              <button className="todo-act-btn" onClick={() => {
-                const tk = new Date().toISOString().slice(0, 10);
-                appStore.deleteRecurringAllFuture(r.id, tk);
-              }}>✕</button>
+              <button className="todo-act-btn" onClick={() => appStore.deleteRecurringPermanently(r.id)}>✕</button>
             </div>
           ))
         }

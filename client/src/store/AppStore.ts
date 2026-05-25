@@ -302,6 +302,15 @@ class AppStore {
     this._notify();
   }
 
+  /** Fully remove a recurring task from the list (used by manage modal). */
+  deleteRecurringPermanently(recId: string): void {
+    const id = this._activeListId ?? '';
+    const recs = this.getRecurring(id).filter(r => r.id !== recId);
+    this._recurring.set(id, recs);
+    this._saveRecurring(id);
+    this._notify();
+  }
+
   deleteRecurringAllFuture(recId: string, fromKey: string): void {
     const id = this._activeListId ?? '';
     const dels = this._loadRecDeletions(id);

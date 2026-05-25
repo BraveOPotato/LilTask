@@ -12,48 +12,60 @@ interface Props {
   onClose: () => void;
 }
 
+// Renders sidebar *contents* only — App.tsx owns the <nav id="sidebar"> wrapper
 export function Sidebar({ view, onSwitchView, onClose }: Props) {
   useStore();
   const lists = appStore.lists;
   const activeListId = appStore.activeListId;
-  const { open } = useModal();
+  const { open, close } = useModal();
 
-  function openNewList() {
-    open(<NewListModal onClose={() => {}} />);
+  function handleDelete(listId: string) {
+    if (appStore.lists.length <= 1) {
+      open(<div>
+        <div className="modal-title">Can't delete</div>
+        <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 16 }}>You need at least one list.</p>
+        <div className="modal-actions"><button className="modal-btn primary" onClick={close}>OK</button></div>
+      </div>);
+      return;
+    }
+    const list = appStore.lists.find(l => l.id === listId);
+    open(<div>
+      <div className="modal-title">Delete list?</div>
+      <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 16 }}>
+        Delete <strong style={{ color: 'var(--text)' }}>{list?.name}</strong>? Removes from your device only.
+      </p>
+      <div className="modal-actions">
+        <button className="modal-btn" onClick={close}>Cancel</button>
+        <button className="modal-btn" style={{ background: 'var(--red)', borderColor: 'var(--red)', color: '#fff' }}
+          onClick={() => { appStore.deleteList(listId); appStore.ensureDefaultList(); close(); }}>Delete</button>
+      </div>
+    </div>);
   }
 
   return (
-    <nav id="sidebar">
+    <>
       <div className="sidebar-logo">✦ <span>LilTask</span></div>
 
       <div className="sidebar-section">Lists</div>
 
       <div id="lists-nav">
         {lists.map(list => {
-          const count   = appStore.getTodos(list.id).length;
+          const count    = appStore.getTodos(list.id).length;
           const isActive = list.id === activeListId;
           return (
-            <div
-              key={list.id}
-              className={`list-item ${isActive ? 'active' : ''}`}
-              onClick={() => { appStore.switchList(list.id); onClose(); }}
-            >
+            <div key={list.id} className={`list-item ${isActive ? 'active' : ''}`}
+              onClick={() => { appStore.switchList(list.id); onClose(); }}>
               <div className="li-dot" />
-              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {list.name}
-              </span>
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{list.name}</span>
               <span className="li-count">{count}</span>
-              <button
-                className="li-delete-btn"
-                onClick={e => { e.stopPropagation(); handleDelete(list.id); }}
-                title="Delete list"
-              >✕</button>
+              <button className="li-delete-btn" title="Delete list"
+                onClick={e => { e.stopPropagation(); handleDelete(list.id); }}>✕</button>
             </div>
           );
         })}
       </div>
 
-      <button id="new-list-btn" onClick={openNewList}>＋ New list</button>
+      <button id="new-list-btn" onClick={() => open(<NewListModal onClose={close} />)}>＋ New list</button>
 
       <div className="sidebar-nav">
         <div className="sidebar-nav-section">Views</div>
@@ -65,63 +77,16 @@ export function Sidebar({ view, onSwitchView, onClose }: Props) {
         </button>
 
         <div className="sidebar-nav-section">Plugins</div>
-        <button className="nav-btn" onClick={() => open(<PluginsModal />)}>
-          <PluginsIcon /> Plugins
-        </button>
+        <button className="nav-btn" onClick={() => open(<PluginsModal />)}><PluginsIcon /> Plugins</button>
 
         <div className="sidebar-nav-section">App</div>
-        <button className="nav-btn" onClick={() => open(<ThemesModal />)}>
-          <ThemeIcon /> Themes
-        </button>
-        <button className="nav-btn" onClick={() => open(<SettingsModal />)}>
-          <SettingsIcon /> Settings
-        </button>
+        <button className="nav-btn" onClick={() => open(<ThemesModal />)}><ThemeIcon /> Themes</button>
+        <button className="nav-btn" onClick={() => open(<SettingsModal />)}><SettingsIcon /> Settings</button>
       </div>
-    </nav>
-  );
-
-  function handleDelete(listId: string) {
-    const realCount = appStore.lists.length;
-    if (realCount <= 1) {
-      open(
-        <div>
-          <div className="modal-title">Can't delete</div>
-          <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 16 }}>You need at least one list.</p>
-          <div className="modal-actions">
-            <button className="modal-btn primary" onClick={() => open(null as any)}>OK</button>
-          </div>
-        </div>
-      );
-      return;
-    }
-    const list = appStore.lists.find(l => l.id === listId);
-    open(
-      <DeleteListModal name={list?.name ?? ''} onConfirm={() => {
-        appStore.deleteList(listId);
-        appStore.ensureDefaultList();
-      }} />
-    );
-  }
-}
-
-function DeleteListModal({ name, onConfirm }: { name: string; onConfirm: () => void }) {
-  const { close } = useModal();
-  return (
-    <div>
-      <div className="modal-title">Delete list?</div>
-      <p style={{ color: 'var(--text3)', fontSize: 14, marginBottom: 16 }}>
-        Delete <strong style={{ color: 'var(--text)' }}>{name}</strong>? Removes from your device only.
-      </p>
-      <div className="modal-actions">
-        <button className="modal-btn" onClick={close}>Cancel</button>
-        <button className="modal-btn" style={{ background: 'var(--red)', borderColor: 'var(--red)', color: '#fff' }}
-          onClick={() => { onConfirm(); close(); }}>Delete</button>
-      </div>
-    </div>
+    </>
   );
 }
 
-// ── Icons ────────────────────────────────────────────────────────────────────
 function ListsIcon()    { return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="7.25" width="12" height="1.5" rx="0.75" fill="currentColor"/><rect x="2" y="11.5" width="8" height="1.5" rx="0.75" fill="currentColor"/></svg>; }
 function CalendarIcon() { return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="3" width="12" height="11" rx="2" stroke="currentColor" strokeWidth="1.5" fill="none"/><path d="M5 2v2M11 2v2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/><path d="M2 7h12" stroke="currentColor" strokeWidth="1.5"/></svg>; }
 function PluginsIcon()  { return <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M6 2h4v3l2 1-1 2-2-1v2l2 1-1 2-2-1v3H6v-3l-2 1-1-2 2-1v-2l-2 1-1-2 2-1V2z" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinejoin="round"/></svg>; }
