@@ -1213,3 +1213,19 @@ flex-shrink: 0;
     padding: 2px 5px;
     flex-shrink: 0;
 }
+
+/* ─── Inline edit input ─── */
+.todo-edit-input {
+  width: 100%;
+  background: var(--bg4);
+  border: 1.5px solid var(--accent);
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 14px;
+  outline: none;
+}
+
+/* ─── due-badge today ─── */
+.due-badge.today { background: rgba(34,211,160,0.15); color: var(--green); }
