@@ -18,25 +18,23 @@ interface Props {
 export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDrop, onTouchStart, onTouchMove, onTouchEnd }: Props) {
   const [editing, setEditing]   = useState(false);
   const [editText, setEditText] = useState(todo.text);
-  const [editDue, setEditDue]   = useState(todo.dueDate ?? '');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (editing) inputRef.current?.focus(); }, [editing]);
 
-  // Sync text if todo changes externally
   useEffect(() => {
-    if (!editing) { setEditText(todo.text); setEditDue(todo.dueDate ?? ''); }
-  }, [todo.text, todo.dueDate, editing]);
+    if (!editing) setEditText(todo.text);
+  }, [todo.text, editing]);
 
   function commitEdit() {
     const t = editText.trim();
-    if (t) appStore.editTodo(listId, todo.id, t, editDue || undefined);
+    if (t) appStore.editTodo(listId, todo.id, t, todo.dueDate);
     setEditing(false);
   }
 
   function onKeyDown(e: KeyboardEvent) {
     if (e.key === 'Enter')  commitEdit();
-    if (e.key === 'Escape') { setEditing(false); setEditText(todo.text); setEditDue(todo.dueDate ?? ''); }
+    if (e.key === 'Escape') { setEditing(false); setEditText(todo.text); }
   }
 
   const overdue  = todo.isOverdue();
@@ -67,25 +65,15 @@ export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDr
 
       <div className="todo-text" style={{ flex: 1 }}>
         {editing ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <input
-              ref={inputRef}
-              className="todo-edit-input"
-              value={editText}
-              onChange={e => setEditText(e.target.value)}
-              onKeyDown={onKeyDown}
-              onBlur={commitEdit}
-            />
-            <input
-              type="date"
-              className="todo-edit-input"
-              value={editDue}
-              onChange={e => setEditDue(e.target.value)}
-              style={{ fontSize: 12, opacity: 0.7 }}
-            />
-          </div>
+          <input
+            ref={inputRef}
+            className="todo-edit-input"
+            value={editText}
+            onChange={e => setEditText(e.target.value)}
+            onKeyDown={onKeyDown}
+            onBlur={commitEdit}
+          />
         ) : (
-          // Single click to edit (touch-friendly)
           <span
             onClick={() => setEditing(true)}
             style={{ cursor: 'text', display: 'block', minHeight: 20 }}

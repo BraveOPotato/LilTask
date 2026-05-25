@@ -15,35 +15,42 @@ export function TodoView() {
   const [showDue, setShowDue]     = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const todos  = activeListId ? appStore.getTodos(activeListId) : [];
+  const todos   = activeListId ? appStore.getTodos(activeListId) : [];
   const plugins = activeList?.plugins ?? { categoryGroup: false, finishRewards: true };
+
+  // Keep a ref to todos so drag handlers always see the latest list
+  const todosRef = useRef(todos);
+  todosRef.current = todos;
 
   // ── Drag (mouse) ────────────────────────────────────────────────────────────
   const dragFrom = useRef<number | null>(null);
   const dragTo   = useRef<number | null>(null);
 
   function handleDrop() {
-    if (dragFrom.current === null || dragTo.current === null || !activeListId) return;
-    const ids = todos.map(t => t.id);
-    const [moved] = ids.splice(dragFrom.current, 1);
-    ids.splice(dragTo.current, 0, moved);
-    appStore.reorderTodos(activeListId, ids);
+    const from = dragFrom.current;
+    const to   = dragTo.current;
     dragFrom.current = null;
     dragTo.current   = null;
+    if (from === null || to === null || from === to || !activeListId) return;
+    const ids = todosRef.current.map(t => t.id);
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
+    appStore.reorderTodos(activeListId, ids);
   }
 
   // ── Touch drag ───────────────────────────────────────────────────────────────
-  const touchFrom = useRef<number | null>(null);
+  const touchFrom    = useRef<number | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   function handleTouchStart(idx: number) {
     touchFrom.current = idx;
+    dragTo.current    = idx;
   }
 
   function handleTouchMove(clientY: number) {
-    if (touchFrom.current === null || !containerRef.current || !activeListId) return;
+    if (touchFrom.current === null || !containerRef.current) return;
     const items = [...containerRef.current.querySelectorAll<HTMLElement>('.todo-item')];
-    let dropIdx = items.length;
+    let dropIdx = items.length - 1;
     for (let i = 0; i < items.length; i++) {
       const rect = items[i].getBoundingClientRect();
       if (clientY < rect.top + rect.height / 2) { dropIdx = i; break; }
@@ -52,20 +59,15 @@ export function TodoView() {
   }
 
   function handleTouchEnd() {
-    if (touchFrom.current === null || dragTo.current === null || !activeListId) {
-      touchFrom.current = null; dragTo.current = null; return;
-    }
     const from = touchFrom.current;
-    let   to   = dragTo.current;
-    if (to > from) to -= 1;
-    if (from !== to) {
-      const ids = todos.map(t => t.id);
-      const [moved] = ids.splice(from, 1);
-      ids.splice(to, 0, moved);
-      appStore.reorderTodos(activeListId, ids);
-    }
+    const to   = dragTo.current;
     touchFrom.current = null;
     dragTo.current    = null;
+    if (from === null || to === null || from === to || !activeListId) return;
+    const ids = todosRef.current.map(t => t.id);
+    const [moved] = ids.splice(from, 1);
+    ids.splice(to, 0, moved);
+    appStore.reorderTodos(activeListId, ids);
   }
 
   // ── Add todo ────────────────────────────────────────────────────────────────
@@ -85,26 +87,31 @@ export function TodoView() {
   const total = todos.length;
   const pct   = total === 0 ? 0 : Math.round((done / total) * 100);
 
-  function renderTodoList(items: TodoItem[], startIdx: number) {
-    const rowProps = (t: TodoItem, absIdx: number) => ({
-      key: t.id, todo: t, listId: activeListId!, index: absIdx,
-      onDragStart: (idx: number) => { dragFrom.current = idx; },
-      onDragOver:  (idx: number) => { dragTo.current   = idx; },
-      onDrop: handleDrop,
-      onTouchStart: handleTouchStart,
-      onTouchMove:  handleTouchMove,
-      onTouchEnd:   handleTouchEnd,
-    });
+  function renderRow(t: TodoItem, absIdx: number) {
+    return (
+      <TodoItemRow
+        key={t.id}
+        todo={t} listId={activeListId!} index={absIdx}
+        onDragStart={(idx) => { dragFrom.current = idx; }}
+        onDragOver={(idx)  => { dragTo.current   = idx; }}
+        onDrop={handleDrop}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+      />
+    );
+  }
 
+  function renderTodoList(items: TodoItem[], startIdx: number) {
     if (!plugins.categoryGroup) {
-      return items.map((t, i) => <TodoItemRow {...rowProps(t, startIdx + i)} />);
+      return items.map((t, i) => renderRow(t, startIdx + i));
     }
     const groups: Record<string, TodoItem[]> = {};
     items.forEach(t => { const c = categorize(t.text); (groups[c] ??= []).push(t); });
     return Object.entries(groups).map(([cat, catItems]) => (
       <div key={cat}>
         <div className="category-header">{cat}</div>
-        {catItems.map(t => <TodoItemRow {...rowProps(t, startIdx + items.indexOf(t))} />)}
+        {catItems.map(t => renderRow(t, startIdx + items.indexOf(t)))}
       </div>
     ));
   }
