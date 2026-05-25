@@ -68,6 +68,10 @@ export interface RecurringTaskData {
   periodTotal: number;
   earlyCompletion: boolean;
   createdAt: string;
+  /** For weekly: days of week to fire (0=Sun…6=Sat). Empty = every day of week. */
+  weekDays?: number[];
+  /** For monthly: days of month to fire (1–31). Empty = day 1. */
+  monthDays?: number[];
 }
 
 export class RecurringTask {
@@ -77,6 +81,8 @@ export class RecurringTask {
   periodTotal: number;
   earlyCompletion: boolean;
   readonly createdAt: string;
+  weekDays: number[];
+  monthDays: number[];
 
   constructor(data: RecurringTaskData) {
     this.id              = data.id;
@@ -85,6 +91,8 @@ export class RecurringTask {
     this.periodTotal     = data.periodTotal;
     this.earlyCompletion = data.earlyCompletion;
     this.createdAt       = data.createdAt;
+    this.weekDays        = data.weekDays  ?? [];
+    this.monthDays       = data.monthDays ?? [];
   }
 
   getPeriodKey(date?: Date): string {
@@ -92,7 +100,14 @@ export class RecurringTask {
   }
 
   isDueOn(date: Date): boolean {
-    return isRecurringDueOn(this.type, date);
+    if (this.type === 'daily') return true;
+    if (this.type === 'weekly') {
+      const days = this.weekDays.length > 0 ? this.weekDays : [1]; // default Monday
+      return days.includes(date.getDay());
+    }
+    // monthly
+    const days = this.monthDays.length > 0 ? this.monthDays : [1];
+    return days.includes(date.getDate());
   }
 
   toJSON(): RecurringTaskData {
@@ -101,6 +116,8 @@ export class RecurringTask {
       periodTotal: this.periodTotal,
       earlyCompletion: this.earlyCompletion,
       createdAt: this.createdAt,
+      weekDays: this.weekDays,
+      monthDays: this.monthDays,
     };
   }
 

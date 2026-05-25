@@ -290,13 +290,18 @@ class AppStore {
     localStorage.setItem(this._recurringKey(listId), JSON.stringify(arr.map(r => r.toJSON())));
   }
 
-  addRecurring(text: string, type: RecurrenceType, periodTotal = 1, earlyCompletion = false): void {
+  addRecurring(text: string, type: RecurrenceType, periodTotal = 1, earlyCompletion = false, weekDays: number[] = [], monthDays: number[] = []): void {
     const id = this._activeListId ?? '';
     const recs = this.getRecurring(id);
+    const newId = (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
     recs.push(new RecurringTask({
-      id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+      id: newId,
       text, type, periodTotal, earlyCompletion,
       createdAt: new Date().toISOString(),
+      weekDays,
+      monthDays,
     }));
     this._saveRecurring(id);
     this._notify();

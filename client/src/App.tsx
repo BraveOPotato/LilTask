@@ -30,15 +30,15 @@ export default function App() {
 
         {/* Sidebar: single element owns #sidebar id + open class */}
         <nav id="sidebar" className={sidebarOpen ? 'open' : ''}>
-          <Sidebar
-            view={view}
-            onSwitchView={v => { setView(v); setSidebarOpen(false); }}
-            onClose={() => setSidebarOpen(false)}
-          />
+          <Sidebar onClose={() => setSidebarOpen(false)} />
         </nav>
 
         <div id="main">
-          <Header onMenuToggle={() => setSidebarOpen(v => !v)} />
+          <Header
+            onMenuToggle={() => setSidebarOpen(v => !v)}
+            view={view}
+            onSwitchView={setView}
+          />
           {view === 'lists'    && <TodoView />}
           {view === 'calendar' && <CalendarView />}
         </div>
