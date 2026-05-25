@@ -1,5 +1,6 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { appStore } from '../../store/AppStore';
+import { useStore } from '../../store/useStore';
 import { useModal } from '../../context/ModalContext';
 import type { RecurrenceType } from '../../models';
 
@@ -7,10 +8,8 @@ export function RecurringModal() {
   const { close } = useModal();
   const [view, setView] = useState<'list' | 'new'>('list');
 
-  const recs = useSyncExternalStore(
-    cb => appStore.subscribe(cb),
-    () => appStore.getRecurring(),
-  );
+  useStore();
+  const recs = appStore.getRecurring();
 
   const typeLabel: Record<RecurrenceType, string> = { daily: '🌅 Daily', weekly: '📆 Weekly', monthly: '🗓️ Monthly' };
 

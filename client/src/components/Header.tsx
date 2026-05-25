@@ -7,7 +7,9 @@ interface Props {
 }
 
 export function Header({ onMenuToggle }: Props) {
-  const { activeList, syncStatus } = useStore();
+  const store = useStore();
+  const activeList = store.activeList;
+  const syncStatus = store.syncStatus;
   const { open } = useModal();
 
   const dotClass = `sync-dot ${syncStatus}`;

@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+
 import { appStore } from '../store/AppStore';
 import { RecurringTask } from '../models';
 import { useModal } from '../context/ModalContext';
@@ -9,10 +9,7 @@ interface Props { listId: string; }
 export function RecurringSection({ listId: _listId }: Props) {
   const { open } = useModal();
 
-  const recs = useSyncExternalStore(
-    cb => appStore.subscribe(cb),
-    () => appStore.getActiveRecurring(),
-  );
+  const recs = appStore.getActiveRecurring();
 
   const daily   = recs.filter(r => r.type === 'daily');
   const weekly  = recs.filter(r => r.type === 'weekly');

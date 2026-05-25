@@ -5,7 +5,9 @@ import type { PluginState } from '../../models';
 
 export function PluginsModal() {
   const { close } = useModal();
-  const { activeListId, activeList } = useStore();
+  useStore();
+  const activeListId = appStore.activeListId;
+  const activeList = appStore.activeList;
 
   if (!activeListId || !activeList) return null;
 

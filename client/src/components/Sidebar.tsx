@@ -13,7 +13,9 @@ interface Props {
 }
 
 export function Sidebar({ view, onSwitchView, onClose }: Props) {
-  const { lists, activeListId } = useStore();
+  useStore();
+  const lists = appStore.lists;
+  const activeListId = appStore.activeListId;
   const { open } = useModal();
 
   function openNewList() {

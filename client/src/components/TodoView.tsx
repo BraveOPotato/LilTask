@@ -1,4 +1,4 @@
-import { useState, useRef, useSyncExternalStore } from 'react';
+import { useState, useRef } from 'react';
 import { appStore } from '../store/AppStore';
 import { useStore } from '../store/useStore';
 import { TodoItemRow } from './TodoItemRow';
@@ -7,17 +7,15 @@ import { categorize } from '../utils/categorize';
 import { RecurringSection } from './RecurringSection';
 
 export function TodoView() {
-  const { activeListId, activeList } = useStore();
+  useStore();
+  const activeListId = appStore.activeListId;
+  const activeList = appStore.activeList;
   const [inputText, setInputText] = useState('');
   const [inputDue, setInputDue]   = useState('');
   const [showDue, setShowDue]     = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Re-render when store changes
-  const todos = useSyncExternalStore(
-    cb => appStore.subscribe(cb),
-    () => activeListId ? appStore.getTodos(activeListId) : [],
-  );
+  const todos = activeListId ? appStore.getTodos(activeListId) : [];
 
   const plugins = activeList?.plugins ?? { categoryGroup: false, finishRewards: true };
 

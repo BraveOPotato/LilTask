@@ -1,17 +1,9 @@
-import { useSyncExternalStore } from 'react';
+import { useEffect, useReducer } from 'react';
 import { appStore } from './AppStore';
 
+/** Forces re-render whenever appStore notifies. Returns nothing — read from appStore directly. */
 export function useStore() {
-  return useSyncExternalStore(
-    (cb) => appStore.subscribe(cb),
-    () => ({
-      lists:        appStore.lists,
-      activeListId: appStore.activeListId,
-      activeList:   appStore.activeList,
-      syncStatus:   appStore.syncStatus,
-      theme:        appStore.theme,
-      offlineMode:  appStore.offlineMode,
-      workerUrl:    appStore.workerUrl,
-    }),
-  );
+  const [, rerender] = useReducer(x => x + 1, 0);
+  useEffect(() => appStore.subscribe(rerender), []);
+  return appStore;
 }

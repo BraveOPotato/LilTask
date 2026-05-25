@@ -1,4 +1,4 @@
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import { appStore } from '../store/AppStore';
 import { useStore } from '../store/useStore';
 import { useModal } from '../context/ModalContext';
@@ -13,10 +13,9 @@ export function CalendarView() {
   const [year,  setYear]  = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const { open } = useModal();
-  const { activeListId } = useStore();
+  useStore();
+  const activeListId = appStore.activeListId;
 
-  // re-render on store change
-  useSyncExternalStore(cb => appStore.subscribe(cb), () => appStore.lists);
 
   function calNav(dir: -1 | 1) {
     const d = new Date(year, month + dir, 1);
@@ -106,22 +105,17 @@ function CalCell({ year, month, day, otherMonth, today, activeListId, onOpen }: 
 
 function CalDayModal({ dateKey: dk }: { dateKey: string }) {
   const { close } = useModal();
-  const { activeListId } = useStore();
+  useStore();
+  const activeListId = appStore.activeListId;
   const [newText, setNewText] = useState('');
 
   const [y, m, d] = dk.split('-');
   const label = `${MONTH_NAMES[parseInt(m) - 1]} ${parseInt(d)}, ${y}`;
 
-  const todos = useSyncExternalStore(
-    cb => appStore.subscribe(cb),
-    () => activeListId ? appStore.getTodos(activeListId).filter(t => t.dueDate === dk) : [],
-  );
+  const todos = activeListId ? appStore.getTodos(activeListId).filter(t => t.dueDate === dk) : [];
 
   const date = new Date(parseInt(y), parseInt(m) - 1, parseInt(d));
-  const recs  = useSyncExternalStore(
-    cb => appStore.subscribe(cb),
-    () => appStore.getActiveRecurring(date).filter(r => !appStore.isRecurringDeleted(r.id, dk)),
-  );
+  const recs = appStore.getActiveRecurring(date).filter(r => !appStore.isRecurringDeleted(r.id, dk));
 
   function addTask() {
     if (!newText.trim() || !activeListId) return;

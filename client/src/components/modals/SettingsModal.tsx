@@ -5,7 +5,9 @@ import { useModal } from '../../context/ModalContext';
 
 export function SettingsModal() {
   const { close } = useModal();
-  const { offlineMode, workerUrl } = useStore();
+  useStore();
+  const offlineMode = appStore.offlineMode;
+  const workerUrl = appStore.workerUrl;
   const [urlInput, setUrlInput] = useState(workerUrl.includes('YOUR_WORKER') ? '' : workerUrl);
 
   function save() {

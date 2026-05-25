@@ -5,7 +5,9 @@ import { useModal } from '../../context/ModalContext';
 
 export function ShareModal() {
   const { close } = useModal();
-  const { activeListId, activeList } = useStore();
+  useStore();
+  const activeListId = appStore.activeListId;
+  const activeList = appStore.activeList;
   const [copied, setCopied] = useState(false);
 
   if (!activeListId || !activeList) return null;

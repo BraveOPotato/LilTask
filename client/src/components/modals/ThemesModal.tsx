@@ -4,7 +4,8 @@ import { useModal } from '../../context/ModalContext';
 
 export function ThemesModal() {
   const { close } = useModal();
-  const { theme } = useStore();
+  useStore();
+  const theme = appStore.theme;
 
   const dark  = THEMES.filter(t => t.dark);
   const light = THEMES.filter(t => !t.dark);
