@@ -1,4 +1,5 @@
 
+import { useStore } from '../store/useStore';
 import { appStore } from '../store/AppStore';
 import { RecurringTask } from '../models';
 import { useModal } from '../context/ModalContext';
@@ -7,6 +8,7 @@ import { RecurringModal } from './modals/RecurringModal';
 interface Props { listId: string; }
 
 export function RecurringSection({ listId: _listId }: Props) {
+  useStore();
   const { open } = useModal();
 
   const recs = appStore.getActiveRecurring();
