@@ -70,7 +70,6 @@ class AppStore {
   private _syncTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private _isPulling = false;
   private _workerUrl = 'https://liltask-sync.abdullahalkafajy.workers.dev/';
-  private _offlineMode = false;
 
   // Theme
   private _theme = 'dark-violet';
@@ -110,7 +109,6 @@ class AppStore {
 
     this._activeListId = localStorage.getItem('liltask_active') || null;
     this._theme        = localStorage.getItem('liltask_theme') || 'dark-violet';
-    this._offlineMode  = localStorage.getItem('liltask_offline_mode') === 'true';
     this._workerUrl    = localStorage.getItem('liltask_worker_url') || this._workerUrl;
   }
 
@@ -449,13 +447,21 @@ class AppStore {
 
   // ── Sync ────────────────────────────────────────────────────────────────────
   get syncStatus(): SyncStatus { return this._syncStatus; }
-  get offlineMode(): boolean   { return this._offlineMode; }
   get workerUrl(): string      { return this._workerUrl; }
 
-  setOfflineMode(val: boolean): void {
-    this._offlineMode = val;
-    localStorage.setItem('liltask_offline_mode', val ? 'true' : 'false');
-    this._syncStatus = val ? 'offline' : 'synced';
+  isListSyncEnabled(listId?: string): boolean {
+    const id = listId ?? this._activeListId;
+    if (!id) return false;
+    return this._lists.get(id)?.syncEnabled ?? false;
+  }
+
+  setListSyncEnabled(listId: string, enabled: boolean): void {
+    const list = this._lists.get(listId);
+    if (!list) return;
+    list.syncEnabled = enabled;
+    this._save();
+    this._syncStatus = enabled ? 'synced' : 'offline';
+    if (enabled) this._pullUpdate(listId);
     this._notify();
   }
 
@@ -476,12 +482,13 @@ class AppStore {
 
   private _scheduleSync(listId: string): void {
     if (this._isPulling) return;
+    if (!this.isListSyncEnabled(listId)) return;
     clearTimeout(this._syncTimers.get(listId));
     this._syncTimers.set(listId, setTimeout(() => this._pushUpdate(listId), 800));
   }
 
   private async _pushUpdate(listId: string): Promise<void> {
-    if (this._offlineMode) return;
+    if (!this.isListSyncEnabled(listId)) return;
     const list = this._lists.get(listId);
     const url  = this._effectiveWorkerUrl();
     if (!list || url.includes('YOUR_WORKER')) return;
@@ -499,7 +506,7 @@ class AppStore {
   }
 
   private async _pullUpdate(listId: string): Promise<void> {
-    if (this._offlineMode) return;
+    if (!this.isListSyncEnabled(listId)) return;
     const list = this._lists.get(listId);
     const url  = this._effectiveWorkerUrl();
     if (!list || url.includes('YOUR_WORKER')) return;
@@ -522,7 +529,9 @@ class AppStore {
 
   startPolling(): void {
     setInterval(() => {
-      if (this._activeListId) this._pullUpdate(this._activeListId);
+      if (this._activeListId && this.isListSyncEnabled(this._activeListId)) {
+        this._pullUpdate(this._activeListId);
+      }
     }, 10_000);
   }
 

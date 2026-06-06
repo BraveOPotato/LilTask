@@ -11,8 +11,6 @@ export function TodoView() {
   const activeListId = appStore.activeListId;
   const activeList   = appStore.activeList;
   const [inputText, setInputText] = useState('');
-  const [inputDue, setInputDue]   = useState('');
-  const [showDue, setShowDue]     = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const todos   = activeListId ? appStore.getTodos(activeListId) : [];
@@ -73,10 +71,8 @@ export function TodoView() {
   // ── Add todo ────────────────────────────────────────────────────────────────
   function addTodo() {
     if (!inputText.trim() || !activeListId) return;
-    appStore.addTodo(inputText.trim(), inputDue || undefined);
+    appStore.addTodo(inputText.trim());
     setInputText('');
-    setInputDue('');
-    setShowDue(false);
     if (!('ontouchstart' in window)) inputRef.current?.focus();
   }
 
@@ -170,24 +166,14 @@ export function TodoView() {
         </div>
 
         <div className="todo-input-wrap">
-          <div style={{ display: 'flex', gap: 4, flex: 1 }}>
-            <input
-              id="todo-input" ref={inputRef}
-              placeholder="Add a task…" autoComplete="off" spellCheck
-              value={inputText}
-              onChange={e => setInputText(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') addTodo(); }}
-              style={{ flex: 1 }}
-            />
-            <button
-              onClick={() => setShowDue(v => !v)} title="Set due date"
-              style={{ fontSize: 14, padding: '0 8px', background: showDue ? 'var(--accent-glow)' : 'none', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', cursor: 'pointer', color: showDue ? 'var(--accent)' : 'var(--text3)', flexShrink: 0 }}
-            >📅</button>
-          </div>
-          {showDue && (
-            <input type="date" value={inputDue} onChange={e => setInputDue(e.target.value)}
-              style={{ fontSize: 13, padding: '6px 10px', background: 'var(--bg3)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius)', color: 'var(--text)', fontFamily: 'var(--mono)', width: '100%' }} />
-          )}
+          <input
+            id="todo-input" ref={inputRef}
+            placeholder="Add a task…" autoComplete="off" spellCheck
+            value={inputText}
+            onChange={e => setInputText(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') addTodo(); }}
+            style={{ flex: 1 }}
+          />
           <button id="add-btn" onClick={addTodo}>+</button>
         </div>
       </div>

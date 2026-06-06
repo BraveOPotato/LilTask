@@ -142,6 +142,7 @@ export interface TaskListData {
   name: string;
   roomId: string;
   plugins?: PluginState;
+  syncEnabled?: boolean;
 }
 
 export class TaskList {
@@ -149,12 +150,14 @@ export class TaskList {
   name: string;
   readonly roomId: string;
   plugins: PluginState;
+  syncEnabled: boolean;
 
   constructor(data: TaskListData) {
-    this.id      = data.id;
-    this.name    = data.name;
-    this.roomId  = data.roomId;
-    this.plugins = data.plugins ?? { ...DEFAULT_PLUGINS };
+    this.id          = data.id;
+    this.name        = data.name;
+    this.roomId      = data.roomId;
+    this.plugins     = data.plugins ?? { ...DEFAULT_PLUGINS };
+    this.syncEnabled = data.syncEnabled ?? false;
   }
 
   isPlaceholder(): boolean {
@@ -162,7 +165,7 @@ export class TaskList {
   }
 
   toJSON(): TaskListData {
-    return { id: this.id, name: this.name, roomId: this.roomId, plugins: this.plugins };
+    return { id: this.id, name: this.name, roomId: this.roomId, plugins: this.plugins, syncEnabled: this.syncEnabled };
   }
 
   static from(data: TaskListData): TaskList {

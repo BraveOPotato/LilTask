@@ -44,7 +44,7 @@ export function CalendarView() {
 
   return (
     <div id="calendar-view" style={{ display: 'block' }}>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 16px 0' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '8px 16px 10px' }}>
         <button className="modal-btn" onClick={() => open(<RecurringModal />)}>🔁 Recurring Tasks</button>
       </div>
       <div className="cal-nav">
