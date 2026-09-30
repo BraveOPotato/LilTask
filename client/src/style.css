@@ -988,6 +988,23 @@ flex-shrink: 0;
 #sync-btn.spinning svg { animation: spin 0.7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.toast {
+position: fixed;
+left: 50%;
+bottom: 96px;
+transform: translateX(-50%);
+padding: 8px 16px;
+background: var(--bg3);
+border: 1px solid var(--border);
+border-radius: 20px;
+color: var(--text);
+font-size: 13px;
+font-weight: 600;
+pointer-events: none;
+z-index: 300;
+animation: fadeIn 0.2s;
+}
+
 /* ══════════════════════════════════════════════════════════
    RECURRING TASKS STYLES
    ══════════════════════════════════════════════════════════ */

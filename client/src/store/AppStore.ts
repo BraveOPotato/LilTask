@@ -45,6 +45,8 @@ export const PLUGIN_DEFS = [
   { id: 'finishRewards' as const, icon: '🎉', name: 'Finish Rewards',    desc: 'Celebratory emoji when you complete every task!' },
 ];
 
+const POLL_MS = 5 * 60_000;
+
 // ─── Subscriber type ─────────────────────────────────────────────────────────
 type Listener = () => void;
 
@@ -69,6 +71,8 @@ class AppStore {
   private _syncStatus: SyncStatus = 'offline';
   private _syncTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private _isPulling = false;
+  private _pollTimer: ReturnType<typeof setInterval> | undefined;
+  private _lastPull = 0;
   private _workerUrl = 'https://liltask-sync.abdullahalkafajy.workers.dev/';
 
   // Theme
@@ -512,8 +516,7 @@ class AppStore {
     if (!list || url.includes('YOUR_WORKER')) return;
     try {
       const r = await fetch(url + '/' + list.roomId);
-      if (r.status === 204) return;
-      if (r.ok) {
+      if (r.ok && r.status !== 204) {
         const buf    = await r.arrayBuffer();
         const store  = this.getOrCreateCRDT(listId);
         const deltas = decodeUpdates(buf);
@@ -522,17 +525,31 @@ class AppStore {
           store.applyUpdate(deltas);
           this._isPulling = false;
         }
-        this._setSyncStatus('synced');
       }
+      this._setSyncStatus(r.ok ? 'synced' : 'error');
     } catch { this._setSyncStatus('error'); }
   }
 
   startPolling(): void {
-    setInterval(() => {
-      if (this._activeListId && this.isListSyncEnabled(this._activeListId)) {
-        this._pullUpdate(this._activeListId);
-      }
-    }, 10_000);
+    // Hidden tabs skip polls; catch up on return only if a poll was missed.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && Date.now() - this._lastPull >= POLL_MS) this.syncNow();
+    });
+    this.syncNow();
+  }
+
+  /** Pull the active list now and restart the poll timer. */
+  syncNow(): Promise<void> {
+    clearInterval(this._pollTimer);
+    this._pollTimer = setInterval(() => {
+      if (document.visibilityState === 'visible') this._pullActive();
+    }, POLL_MS);
+    return this._pullActive();
+  }
+
+  private _pullActive(): Promise<void> {
+    this._lastPull = Date.now();
+    return this._activeListId ? this._pullUpdate(this._activeListId) : Promise.resolve();
   }
 
   // ── Share URL ────────────────────────────────────────────────────────────────

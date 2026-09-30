@@ -28,7 +28,7 @@ export function TodoItemRow({ todo, listId, index, onDragStart, onDragOver, onDr
 
   function commitEdit() {
     const t = editText.trim();
-    if (t) appStore.editTodo(listId, todo.id, t, todo.dueDate);
+    if (t && t !== todo.text) appStore.editTodo(listId, todo.id, t, todo.dueDate);
     setEditing(false);
   }
 

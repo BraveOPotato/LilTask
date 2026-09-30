@@ -12,6 +12,18 @@ export function TodoView() {
   const activeList   = appStore.activeList;
   const [inputText, setInputText] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [toast, setToast]     = useState('');
+  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  async function syncNow() {
+    setSyncing(true);
+    await appStore.syncNow();
+    setSyncing(false);
+    setToast(appStore.syncStatus === 'error' ? 'Sync failed' : 'Refreshed');
+    clearTimeout(toastTimer.current);
+    toastTimer.current = setTimeout(() => setToast(''), 2000);
+  }
 
   const todos   = activeListId ? appStore.getTodos(activeListId) : [];
   const plugins = activeList?.plugins ?? { categoryGroup: false, finishRewards: true };
@@ -174,9 +186,20 @@ export function TodoView() {
             onKeyDown={e => { if (e.key === 'Enter') addTodo(); }}
             style={{ flex: 1 }}
           />
+          {appStore.isListSyncEnabled() && (
+            <button id="sync-btn" className={syncing ? 'spinning' : ''} onClick={syncNow}
+              disabled={syncing} title="Sync now" aria-label="Sync now">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <path d="M13.5 8a5.5 5.5 0 0 1-9.9 3.3M2.5 8a5.5 5.5 0 0 1 9.9-3.3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                <path d="M12.5 1.5v3.2H9.3M3.5 14.5v-3.2h3.2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+          )}
           <button id="add-btn" onClick={addTodo}>+</button>
         </div>
       </div>
+
+      {toast && <div className="toast" role="status">{toast}</div>}
     </div>
   );
 }
